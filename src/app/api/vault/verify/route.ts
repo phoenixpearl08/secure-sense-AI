@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { vaultService } from '@/services/vault/vaultService';
-import { jsonResponse } from '@/lib/security/headers';
+import { jsonResponse, checkRateLimit } from '@/lib/security/headers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,7 +11,10 @@ export async function POST(req: NextRequest) {
       return jsonResponse({ success: false, error: 'Access identifier is required' }, 400);
     }
 
-    const ipAddress = req.headers.get('x-forwarded-for') || '127.0.0.1';
+    const ipAddress = req.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1';
+    if (!checkRateLimit(`verify:${accessId}:${ipAddress}`, 25, 60)) {
+      return jsonResponse({ success: false, error: 'Too many verification attempts. Please wait.' }, 429);
+    }
 
     const result = await vaultService.verifyAccess({
       accessId,

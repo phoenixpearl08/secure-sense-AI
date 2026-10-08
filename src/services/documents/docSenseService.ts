@@ -193,6 +193,27 @@ export function analyzeDocumentContent(chunks: DocumentChunk[]): DocumentInsight
  */
 export function askDocument(question: string, chunks: DocumentChunk[]): AskAnswer {
   const cleanQ = question.toLowerCase().trim();
+
+  // Prompt-Injection Defense: Block attempts to manipulate system boundaries
+  const injectionPatterns = [
+    'ignore all security',
+    'ignore previous instructions',
+    'system prompt',
+    'bypass security',
+    'bypass policy',
+    'grant admin',
+    'reveal master key',
+    'output secret key',
+  ];
+  if (injectionPatterns.some((pattern) => cleanQ.includes(pattern))) {
+    return {
+      question,
+      answer: 'Blocked: System security rules and access policies cannot be overridden through document queries.',
+      grounded: false,
+      confidence: 1.0,
+    };
+  }
+
   const keywords = cleanQ
     .replace(/[^\w\s]/g, '')
     .split(/\s+/)

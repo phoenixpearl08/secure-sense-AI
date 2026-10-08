@@ -135,10 +135,16 @@ export function parsePolicyLocally(prompt: string): SecurityPolicyData {
     text.includes('hide sender') ||
     text.includes('anonymous') ||
     text.includes('hide identity') ||
+    text.includes('hide my identity') ||
     text.includes('without revealing') ||
+    text.includes('do not reveal') ||
+    text.includes('not reveal') ||
     text.includes('receiver should not know') ||
+    text.includes('receiver must not know') ||
+    text.includes('receiver cannot see') ||
     text.includes('private sender') ||
-    text.includes('untraceable sender')
+    text.includes('untraceable') ||
+    text.includes('maximum privacy')
   ) {
     senderIdentityVisibility = 'HIDDEN';
   }
