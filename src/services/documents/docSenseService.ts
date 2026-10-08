@@ -262,3 +262,71 @@ export function askDocument(question: string, chunks: DocumentChunk[]): AskAnswe
     relevantExcerpt: matchingSentence || bestChunk.content.slice(0, 200),
   };
 }
+
+/**
+ * Evaluates document sensitivity and recommends automated RealityVault security profile
+ */
+export function classifyDocumentSecurity(
+  chunks: DocumentChunk[],
+  insights: DocumentInsight[]
+): import('@/types').DocumentSecurityClassification {
+  const riskFactors: string[] = [];
+  let score = 20; // baseline
+
+  const hasFinancial = insights.some((i) => i.category === 'FINANCIAL');
+  const hasObligations = insights.some((i) => i.category === 'OBLIGATION');
+  const hasRisks = insights.some((i) => i.category === 'RISK');
+  const fullText = chunks.map((c) => c.content).join(' ').toLowerCase();
+
+  if (hasFinancial) {
+    score += 30;
+    riskFactors.push('High-value financial considerations detected');
+  }
+
+  if (hasObligations) {
+    score += 20;
+    riskFactors.push('Legally binding covenants and performance obligations');
+  }
+
+  if (hasRisks || fullText.includes('confidential') || fullText.includes('secret') || fullText.includes('nda')) {
+    score += 25;
+    riskFactors.push('Confidentiality restrictions and non-disclosure clauses');
+  }
+
+  if (fullText.includes('ssn') || fullText.includes('passport') || fullText.includes('salary') || fullText.includes('identity')) {
+    score += 20;
+    riskFactors.push('Potential Personally Identifiable Information (PII) identified');
+  }
+
+  let sensitivity: import('@/types').RiskLevel = 'LOW';
+  let recommendedSecurityLevel: import('@/types').SecurityLevel = 'STANDARD';
+
+  if (score >= 80) {
+    sensitivity = 'CRITICAL';
+    recommendedSecurityLevel = 'CRITICAL';
+  } else if (score >= 50) {
+    sensitivity = 'HIGH';
+    recommendedSecurityLevel = 'HIGH_SECURITY';
+  } else if (score >= 35) {
+    sensitivity = 'MEDIUM';
+    recommendedSecurityLevel = 'CONFIDENTIAL';
+  }
+
+  const finalRiskScore = Math.min(score, 100);
+  const detectedIndicators = riskFactors.length > 0 ? riskFactors : ['Standard business document'];
+  const justification = `DocSenseAI evaluated sensitivity at ${sensitivity} (Score: ${finalRiskScore}/100). Recommended Vault Protection: ${recommendedSecurityLevel} with authenticated encryption and controlled OTP verification.`;
+
+  return {
+    sensitivity,
+    recommendedSecurityLevel,
+    riskScore: finalRiskScore,
+    riskFactors: detectedIndicators,
+    recommendationExplanation: justification,
+    sensitivityLevel: sensitivity,
+    recommendedVaultPolicy: recommendedSecurityLevel,
+    overallRiskScore: finalRiskScore,
+    detectedIndicators,
+    justification,
+  };
+}
+

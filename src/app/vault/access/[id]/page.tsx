@@ -14,8 +14,8 @@ import {
   Smartphone, 
   Mail, 
   EyeOff, 
-  ArrowRight,
-  RefreshCw
+  RefreshCw,
+  Clock
 } from 'lucide-react';
 
 function AccessPortalContent() {
@@ -50,6 +50,23 @@ function AccessPortalContent() {
   const [revealing, setRevealing] = useState(false);
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (secondsRemaining === null || secondsRemaining <= 0) return;
+    const interval = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          setRevealedSecret(null);
+          setError('Timed view session elapsed: decrypted secret burned from screen per policy.');
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [secondsRemaining]);
 
   // Generate or retrieve stable browser device ID for verification
   useEffect(() => {
@@ -138,6 +155,9 @@ function AccessPortalContent() {
 
       if (data.success && data.data?.secret) {
         setRevealedSecret(data.data.secret);
+        if (data.data.viewDurationSeconds) {
+          setSecondsRemaining(data.data.viewDurationSeconds);
+        }
         // Refresh metadata to show consumed status
         fetchMetadata();
       } else {
@@ -344,10 +364,17 @@ function AccessPortalContent() {
             <div className="w-12 h-12 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center justify-center mx-auto">
               <ShieldCheck className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold text-white">Cryptographic Payload Decrypted</h2>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-950 text-rose-400 text-[10px] font-mono border border-rose-800">
-              <Flame className="w-3 h-3" />
-              <span>ATOMIC CONSUMPTION: ACCESS DESTROYED</span>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-950 text-rose-400 text-[10px] font-mono border border-rose-800">
+                <Flame className="w-3 h-3" />
+                <span>ATOMIC CONSUMPTION: ACCESS DESTROYED</span>
+              </div>
+              {secondsRemaining !== null && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-400 text-[10px] font-mono border border-amber-800 animate-pulse">
+                  <Clock className="w-3 h-3" />
+                  <span>WINDOW: {secondsRemaining}s REMAINING</span>
+                </div>
+              )}
             </div>
           </div>
 

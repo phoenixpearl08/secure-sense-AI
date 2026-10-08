@@ -11,7 +11,8 @@ import {
   Video, 
   LayoutDashboard,
   Menu,
-  X
+  X,
+  Send
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -37,6 +38,7 @@ export default function Navbar() {
     { name: 'DocSenseAI', href: '/docsense', icon: FileText },
     { name: 'RealityVault', href: '/vault', icon: Lock },
     { name: 'Combined Mode', href: '/combined', icon: Sparkles },
+    { name: 'Transfers', href: '/transfers', icon: Send },
     { name: 'Security Center', href: '/security-center', icon: Shield },
     { name: 'Meetings', href: '/meetings', icon: Video },
   ];

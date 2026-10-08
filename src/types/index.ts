@@ -1,14 +1,18 @@
-// RealityVault AI + DocSenseAI Type Definitions
+// RealityVault AI + DocSenseAI Complete Enterprise Type Definitions
 
 export type UserRole = 'SUPER_ADMIN' | 'ORG_ADMIN' | 'SECURITY_ADMIN' | 'USER';
 
 export type SecurityLevel = 'STANDARD' | 'CONFIDENTIAL' | 'HIGH_SECURITY' | 'CRITICAL' | 'CUSTOM_AI';
 
-export type VaultItemStatus = 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED' | 'DESTROYED';
+export type VaultItemStatus = 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED' | 'DESTROYED' | 'LOCKED';
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
-export type AccessStatus = 'GRANTED' | 'DENIED' | 'CHALLENGED' | 'CONSUMED';
+export type AccessStatus = 'GRANTED' | 'DENIED' | 'CHALLENGED' | 'CONSUMED' | 'LOCKED';
+
+export type DeliveryMethod = 'SECURE_LINK' | 'QR_CODE' | 'DIRECT_TRANSFER' | 'MEETING_SHARE' | 'EMAIL' | 'MESSAGING';
+
+export type SenderPrivacyMode = 'VISIBLE' | 'HIDDEN';
 
 export interface User {
   id: string;
@@ -30,7 +34,7 @@ export interface Device {
 }
 
 // ==========================================
-// REALITYVAULT
+// REALITYVAULT CORE & POLICIES
 // ==========================================
 
 export interface SecurityPolicyData {
@@ -46,6 +50,13 @@ export interface SecurityPolicyData {
   maxViews: number;
   expiresInHours: number;
   promptText?: string;
+  
+  // Advanced Privacy & Controls
+  senderIdentityVisibility?: SenderPrivacyMode; // 'VISIBLE' | 'HIDDEN' (Maximum Privacy Sender Mode)
+  zeroPersistence?: boolean; // No persistent storage after lifecycle
+  downloadAllowed?: boolean; // If false, in-browser controlled view only
+  viewDurationSeconds?: number; // Timed access window (e.g. 60s)
+  deliveryMethod?: DeliveryMethod;
 }
 
 export interface EncryptedPayload {
@@ -53,6 +64,10 @@ export interface EncryptedPayload {
   iv: string;
   authTag: string;
   algorithm: string;
+  fileHash?: string; // SHA-256 integrity hash for files/payloads
+  fileName?: string;
+  mimeType?: string;
+  fileSize?: number;
 }
 
 export interface VaultItem {
@@ -73,6 +88,7 @@ export interface VaultItem {
   destroyedAt?: string;
   policy: SecurityPolicyData;
   documentId?: string;
+  isEphemeral?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -112,7 +128,63 @@ export interface AuditLog {
 }
 
 // ==========================================
-// DOCSENSEAI
+// REAL OTP DELIVERY PROVIDERS
+// ==========================================
+
+export type OtpProviderType = 'DEV' | 'SMTP' | 'TWILIO_SMS';
+
+export interface OtpDeliveryRequest {
+  target: string; // Email or phone number
+  code: string;
+  itemTitle: string;
+  expiresInMinutes: number;
+}
+
+export interface OtpDeliveryResult {
+  success: boolean;
+  provider: OtpProviderType;
+  maskedTarget: string;
+  messageId?: string;
+  error?: string;
+  devCode?: string; // Present ONLY in non-production/DEV mode
+}
+
+// ==========================================
+// EPHEMERAL REAL-TIME TRANSFERS
+// ==========================================
+
+export type TransferState = 
+  | 'INITIALIZING' 
+  | 'WAITING_RECEIVER' 
+  | 'TRANSFERRING' 
+  | 'COMPLETED' 
+  | 'CANCELLED' 
+  | 'EXPIRED' 
+  | 'CLEANED_UP';
+
+export interface TransferSession {
+  id: string;
+  sessionToken: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  fileHash: string;
+  senderId: string;
+  senderName: string;
+  receiverEmail?: string;
+  state: TransferState;
+  otpCodeHash?: string;
+  totalChunks: number;
+  transferredChunks: number;
+  zeroPersistence: boolean;
+  expiresAt: string;
+  createdAt: string;
+  completedAt?: string;
+  payloadBuffer?: string; // Ephemeral in-memory buffer, destroyed upon completion
+}
+
+// ==========================================
+// DOCSENSEAI & OCR
 // ==========================================
 
 export interface DocumentChunk {
@@ -134,6 +206,20 @@ export interface DocumentInsight {
   confidence: number;
 }
 
+export interface DocumentSecurityClassification {
+  sensitivity: RiskLevel; // 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+  recommendedSecurityLevel: SecurityLevel;
+  riskScore: number;
+  riskFactors: string[];
+  recommendationExplanation: string;
+  // Aliases for unified UI/API binding
+  sensitivityLevel?: RiskLevel;
+  recommendedVaultPolicy?: SecurityLevel;
+  overallRiskScore?: number;
+  detectedIndicators?: string[];
+  justification?: string;
+}
+
 export interface DocumentData {
   id: string;
   title: string;
@@ -145,6 +231,8 @@ export interface DocumentData {
   userId: string;
   chunks: DocumentChunk[];
   insights: DocumentInsight[];
+  classification?: DocumentSecurityClassification;
+  zeroPersistence?: boolean;
   createdAt: string;
 }
 
@@ -167,9 +255,21 @@ export interface MeetingParticipant {
   meetingId: string;
   email: string;
   name: string;
-  role: string;
+  role: 'HOST' | 'ATTENDEE' | 'GUEST';
   verified: boolean;
+  inWaitingRoom?: boolean;
+  deviceId?: string;
   joinedAt?: string;
+}
+
+export interface MeetingDocumentShare {
+  documentId: string;
+  title: string;
+  sharedBy: string;
+  sharedAt: string;
+  expiresInMinutes: number;
+  downloadAllowed: boolean;
+  accessCount: number;
 }
 
 export interface Meeting {
@@ -179,13 +279,38 @@ export interface Meeting {
   hostId: string;
   hostName: string;
   securityLock: boolean;
-  status: 'SCHEDULED' | 'ACTIVE' | 'CONCLUDED';
+  status: 'SCHEDULED' | 'ACTIVE' | 'CONCLUDED' | 'LOCKED';
   participants: MeetingParticipant[];
+  waitingRoom: MeetingParticipant[];
   enforceDevice: boolean;
   enforceOtp: boolean;
   allowRecording: boolean;
+  sharedDocuments: MeetingDocumentShare[];
   attachedDocumentIds?: string[];
   createdAt: string;
+}
+
+// ==========================================
+// SECURITY SCORING & POLICY CONFLICTS
+// ==========================================
+
+export interface PolicyScoreBreakdown {
+  label: string;
+  points: number;
+  passed: boolean;
+}
+
+export interface SecurityScoreReport {
+  score: number; // 0 - 100
+  rating: 'BASIC' | 'STRONG' | 'MAXIMUM_ASSURANCE';
+  breakdown: PolicyScoreBreakdown[];
+}
+
+export interface PolicyConflictWarning {
+  field: string;
+  message: string;
+  resolvedValue: unknown;
+  rationale: string;
 }
 
 // ==========================================

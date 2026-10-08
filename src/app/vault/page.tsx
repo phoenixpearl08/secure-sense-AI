@@ -166,20 +166,26 @@ export default function VaultPage() {
     }
   };
 
-  // Handle Revoke
-  const handleRevoke = async (itemId: string) => {
-    if (!confirm('Are you sure you want to revoke access to this item? Receiver will be permanently blocked.')) return;
+  // Handle Revoke / Emergency Lock / Burn
+  const handleRevoke = async (itemId: string, actionType: 'REVOKE' | 'EMERGENCY_LOCK' | 'BURN' = 'REVOKE') => {
+    const confirmMsg = actionType === 'EMERGENCY_LOCK' 
+      ? 'Trigger EMERGENCY LOCK? All active access sessions and tokens will be immediately severed.'
+      : actionType === 'BURN'
+      ? 'Burn this item? Cryptographic ciphertext will be permanently purged from storage.'
+      : 'Are you sure you want to revoke access to this item?';
+    if (!confirm(confirmMsg)) return;
+
     try {
       const res = await fetch('/api/vault/revoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemId }),
+        body: JSON.stringify({ itemId, actionType }),
       });
       const data = await res.json();
       if (data.success) {
         fetchItems();
       } else {
-        alert(data.error || 'Revocation failed');
+        alert(data.error || 'Operation failed');
       }
     } catch (err) {
       console.error(err);

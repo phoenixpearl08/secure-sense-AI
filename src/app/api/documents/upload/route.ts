@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/lib/db';
 import { authService } from '@/services/auth/authService';
-import { chunkDocumentText, analyzeDocumentContent } from '@/services/documents/docSenseService';
+import { chunkDocumentText, analyzeDocumentContent, classifyDocumentSecurity } from '@/services/documents/docSenseService';
 import { DocumentData } from '@/types';
 import { jsonResponse } from '@/lib/security/headers';
 
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       documentId: docId,
     }));
 
+    const classification = classifyDocumentSecurity(chunks, insights);
     const pageCount = Math.max(...chunks.map((c) => c.pageNumber), 1);
 
     const document: DocumentData = {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
       userId: user ? user.id : 'demo-user',
       chunks,
       insights,
+      classification,
       createdAt: new Date().toISOString(),
     };
 

@@ -3,6 +3,7 @@ import { vaultService } from '@/services/vault/vaultService';
 import { authService } from '@/services/auth/authService';
 import { validateAndNormalizePolicy } from '@/services/ai/policyEngine';
 import { jsonResponse } from '@/lib/security/headers';
+import { generateQrCodeDataUrl } from '@/lib/crypto/qr';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +11,17 @@ export async function POST(req: NextRequest) {
     const user = await authService.getCurrentUser(token);
 
     const body = await req.json();
-    const { title, plaintextSecret, recipientEmail, policy: rawPolicy, documentId } = body;
+    const { 
+      title, 
+      plaintextSecret, 
+      recipientEmail, 
+      policy: rawPolicy, 
+      documentId,
+      fileName,
+      mimeType,
+      fileSize,
+      fileHash,
+    } = body;
 
     if (!title || !plaintextSecret) {
       return jsonResponse({ success: false, error: 'Title and confidential content are required' }, 400);
@@ -30,12 +41,26 @@ export async function POST(req: NextRequest) {
       creatorName,
       policy,
       documentId,
+      fileName,
+      mimeType,
+      fileSize,
+      fileHash,
     });
+
+    // Generate secure QR code containing non-enumerable access URL
+    const accessUrl = `/vault/access/${item.accessId}`;
+    let qrCode: string | undefined;
+    try {
+      qrCode = await generateQrCodeDataUrl(`http://localhost:3000${accessUrl}`);
+    } catch {
+      // Non-fatal fallback
+    }
 
     return jsonResponse(
       {
         success: true,
         data: {
+          id: item.id,
           accessId: item.accessId,
           title: item.title,
           status: item.status,
@@ -43,7 +68,8 @@ export async function POST(req: NextRequest) {
           expiresAt: item.expiresAt,
           maxViews: item.maxViews,
           rawOtp, // Provided to creator upon item generation
-          accessUrl: `/vault/access/${item.accessId}`,
+          accessUrl,
+          qrCode,
         },
       },
       201

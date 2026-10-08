@@ -9,14 +9,14 @@ export async function POST(req: NextRequest) {
     const user = await authService.getCurrentUser(token);
 
     const body = await req.json();
-    const { itemId } = body;
+    const { itemId, actionType } = body;
 
     if (!itemId) {
       return jsonResponse({ success: false, error: 'Item ID is required' }, 400);
     }
 
     const userId = user ? user.id : 'demo-anonymous-user';
-    const updated = await vaultService.revokeItem(itemId, userId);
+    const updated = await vaultService.revokeItem(itemId, userId, actionType || 'REVOKE');
 
     return jsonResponse({ success: true, data: updated }, 200);
   } catch (err: unknown) {

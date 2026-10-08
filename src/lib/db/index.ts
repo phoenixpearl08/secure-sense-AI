@@ -190,7 +190,7 @@ export const db = {
 
   async findVaultItemById(id: string): Promise<VaultItem | null> {
     const state = loadDatabaseState();
-    return state.vaultItems.find((item) => item.id === id) || null;
+    return state.vaultItems.find((item) => item.id === id || item.accessId === id) || null;
   },
 
   async listVaultItems(creatorId?: string): Promise<VaultItem[]> {
@@ -254,6 +254,17 @@ export const db = {
       if (status === 'REVOKED') item.revokedAt = new Date().toISOString();
       if (status === 'DESTROYED') item.destroyedAt = new Date().toISOString();
       item.updatedAt = new Date().toISOString();
+      await persistState();
+      return item;
+    }
+    return null;
+  },
+
+  async updateVaultItem(id: string, updates: Partial<VaultItem>) {
+    const state = loadDatabaseState();
+    const item = state.vaultItems.find((i) => i.id === id);
+    if (item) {
+      Object.assign(item, updates, { updatedAt: new Date().toISOString() });
       await persistState();
       return item;
     }
@@ -338,6 +349,15 @@ export const db = {
   async findMeetingById(id: string) {
     const state = loadDatabaseState();
     return state.meetings.find((m) => m.id === id) || null;
+  },
+
+  async updateMeeting(id: string, updates: Partial<Meeting>) {
+    const state = loadDatabaseState();
+    const idx = state.meetings.findIndex((m) => m.id === id);
+    if (idx === -1) return null;
+    state.meetings[idx] = { ...state.meetings[idx], ...updates };
+    await persistState();
+    return state.meetings[idx];
   },
 
   // Device registration

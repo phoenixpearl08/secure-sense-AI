@@ -84,8 +84,8 @@ export function decryptPayload(payload: EncryptedPayload): string {
 /**
  * Generates a cryptographically secure, non-enumerable URL-safe access token (256-bit entropy)
  */
-export function generateSecureAccessId(): string {
-  return crypto.randomBytes(24).toString('base64url');
+export function generateSecureAccessId(bytes: number = 24): string {
+  return crypto.randomBytes(bytes).toString('base64url');
 }
 
 /**
@@ -117,3 +117,8 @@ export function verifySecret(secret: string, storedHash: string): boolean {
   
   return crypto.timingSafeEqual(Buffer.from(testHash, 'hex'), Buffer.from(originalHash, 'hex'));
 }
+
+// Aliases for unified service usage
+export const encryptText = encryptPayload;
+export const decryptText = decryptPayload;
+export const generateSecureToken = (bytes?: number) => generateSecureAccessId(bytes);

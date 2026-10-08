@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { jsonResponse } from '@/lib/security/headers';
-import { chunkDocumentText, analyzeDocumentContent } from '@/services/documents/docSenseService';
+import { chunkDocumentText, analyzeDocumentContent, classifyDocumentSecurity } from '@/services/documents/docSenseService';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
 
     const chunks = chunkDocumentText(content);
     const insights = analyzeDocumentContent(chunks);
+    const classification = classifyDocumentSecurity(chunks, insights);
 
     return jsonResponse(
       {
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
           title: title || 'Untitled Document',
           chunks,
           insights,
+          classification,
           pageCount: Math.max(...chunks.map((c) => c.pageNumber), 1),
         },
       },

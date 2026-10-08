@@ -2,11 +2,19 @@ import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/lib/db';
 import { authService } from '@/services/auth/authService';
-import { Meeting } from '@/types';
+import { Meeting, MeetingParticipant } from '@/types';
 import { jsonResponse } from '@/lib/security/headers';
 
-
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+
+  if (id) {
+    const meeting = await db.findMeetingById(id);
+    if (!meeting) return jsonResponse({ success: false, error: 'Meeting not found' }, 404);
+    return jsonResponse({ success: true, data: meeting }, 200);
+  }
+
   const meetings = await db.listMeetings();
   return jsonResponse({ success: true, data: meetings }, 200);
 }
@@ -17,18 +25,20 @@ export async function POST(req: NextRequest) {
     const user = await authService.getCurrentUser(token);
 
     const body = await req.json();
-    const { title, scheduledFor, participants, enforceDevice, enforceOtp, allowRecording, attachedDocumentIds } = body;
+    const { title, enforceDevice, enforceOtp, allowRecording, attachedDocumentIds } = body;
+    const scheduledFor = body.scheduledFor || new Date(Date.now() + 3600000).toISOString();
+    const rawParticipants = body.participants || body.participantEmails || [];
 
-    if (!title || !scheduledFor) {
-      return jsonResponse({ success: false, error: 'Meeting title and schedule time are required' }, 400);
+    if (!title) {
+      return jsonResponse({ success: false, error: 'Meeting title is required' }, 400);
     }
 
     const meetingId = crypto.randomUUID();
     const hostId = user ? user.id : 'demo-host-id';
     const hostName = user ? user.name : 'Authorized Host';
 
-    const parsedParticipants = Array.isArray(participants)
-      ? participants.map((p) => ({
+    const parsedParticipants: MeetingParticipant[] = Array.isArray(rawParticipants)
+      ? rawParticipants.map((p) => ({
           id: crypto.randomUUID(),
           meetingId,
           email: typeof p === 'string' ? p : p.email,
@@ -46,10 +56,23 @@ export async function POST(req: NextRequest) {
       hostName,
       securityLock: true,
       status: 'SCHEDULED',
-      participants: parsedParticipants,
+      participants: [
+        {
+          id: crypto.randomUUID(),
+          meetingId,
+          email: user?.email || 'host@realityvault.ai',
+          name: hostName,
+          role: 'HOST',
+          verified: true,
+          joinedAt: new Date().toISOString(),
+        },
+        ...parsedParticipants,
+      ],
+      waitingRoom: [],
       enforceDevice: enforceDevice !== false,
       enforceOtp: enforceOtp !== false,
       allowRecording: Boolean(allowRecording),
+      sharedDocuments: [],
       attachedDocumentIds: attachedDocumentIds || [],
       createdAt: new Date().toISOString(),
     };
@@ -64,7 +87,7 @@ export async function POST(req: NextRequest) {
       entityId: meetingId,
       metadata: {
         title: meeting.title,
-        participantCount: parsedParticipants.length,
+        participantCount: parsedParticipants.length + 1,
         securityLock: meeting.securityLock,
       },
       timestamp: new Date().toISOString(),
@@ -73,6 +96,64 @@ export async function POST(req: NextRequest) {
     return jsonResponse({ success: true, data: meeting }, 201);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to create meeting';
+    return jsonResponse({ success: false, error: msg }, 400);
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { meetingId, action, participantId, documentShare } = body;
+
+    if (!meetingId || !action) {
+      return jsonResponse({ success: false, error: 'Meeting ID and action are required' }, 400);
+    }
+
+    const meeting = await db.findMeetingById(meetingId);
+    if (!meeting) {
+      return jsonResponse({ success: false, error: 'Meeting not found' }, 404);
+    }
+
+    let updated = meeting;
+
+    if (action === 'TOGGLE_LOCK') {
+      const newLock = !meeting.securityLock;
+      const res = await db.updateMeeting(meetingId, { securityLock: newLock });
+      if (res) updated = res;
+    } else if (action === 'ADMIT' && participantId) {
+      const waiting = meeting.waitingRoom.find((p) => p.id === participantId);
+      if (waiting) {
+        const newWaiting = meeting.waitingRoom.filter((p) => p.id !== participantId);
+        const newParticipants = [...meeting.participants, { ...waiting, verified: true, joinedAt: new Date().toISOString() }];
+        const res = await db.updateMeeting(meetingId, {
+          waitingRoom: newWaiting,
+          participants: newParticipants,
+        });
+        if (res) updated = res;
+      }
+    } else if (action === 'REMOVE' && participantId) {
+      const newParticipants = meeting.participants.filter((p) => p.id !== participantId);
+      const newWaiting = meeting.waitingRoom.filter((p) => p.id !== participantId);
+      const res = await db.updateMeeting(meetingId, {
+        participants: newParticipants,
+        waitingRoom: newWaiting,
+      });
+      if (res) updated = res;
+    } else if (action === 'SHARE_DOCUMENT' && documentShare) {
+      const newShared = [...meeting.sharedDocuments, documentShare];
+      const res = await db.updateMeeting(meetingId, { sharedDocuments: newShared });
+      if (res) updated = res;
+    } else if (action === 'END_MEETING') {
+      const res = await db.updateMeeting(meetingId, {
+        status: 'CONCLUDED',
+        sharedDocuments: [], // Purge active shared documents upon meeting conclusion
+      });
+      if (res) updated = res;
+    }
+
+    return jsonResponse({ success: true, data: updated }, 200);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Meeting update failed';
     return jsonResponse({ success: false, error: msg }, 400);
   }
 }
