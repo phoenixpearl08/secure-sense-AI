@@ -14,7 +14,16 @@ export const vaultService = {
    */
   async createItem(params: {
     title: string;
-    plaintextSecret: string;
+    plaintextSecret?: string;
+    fileData?: string;
+    files?: Array<{
+      name: string;
+      mimeType: string;
+      size: number;
+      hash?: string;
+      data: string;
+      folderPath?: string;
+    }>;
     recipientEmail?: string;
     creatorId: string;
     creatorName?: string;
@@ -30,10 +39,38 @@ export const vaultService = {
       securityLevel: params.policy.securityLevel,
       maxViews: params.policy.maxViews,
       senderIdentityVisibility: params.policy.senderIdentityVisibility,
+      hasAttachedFile: Boolean(params.fileData || params.fileName),
+      fileCount: params.files?.length || (params.fileData ? 1 : 0),
     });
 
-    // 1. Authenticated AES-256-GCM Encryption
-    const encryptedPayload = encryptText(params.plaintextSecret);
+    // 1. Prepare structured payload for authenticated AES-256-GCM Encryption
+    let contentToEncrypt: string;
+    if (params.files && params.files.length > 0) {
+      contentToEncrypt = JSON.stringify({
+        __vaultType: 'SECURE_FILE_PACKAGE',
+        version: '2.0',
+        text: params.plaintextSecret || '',
+        file: params.files[0],
+        files: params.files,
+      });
+    } else if (params.fileData) {
+      contentToEncrypt = JSON.stringify({
+        __vaultType: 'SECURE_FILE_PACKAGE',
+        version: '2.0',
+        text: params.plaintextSecret || '',
+        file: {
+          name: params.fileName || 'secure_file',
+          mimeType: params.mimeType || 'application/octet-stream',
+          size: params.fileSize || 0,
+          hash: params.fileHash,
+          data: params.fileData,
+        },
+      });
+    } else {
+      contentToEncrypt = params.plaintextSecret || '';
+    }
+
+    const encryptedPayload = encryptText(contentToEncrypt);
     if (params.fileName) {
       encryptedPayload.fileName = params.fileName;
       encryptedPayload.mimeType = params.mimeType;
@@ -118,9 +155,10 @@ export const vaultService = {
   },
 
   /**
-   * Retrieves public access metadata without revealing sensitive ciphertext or plaintexts
+   * Retrieves public access metadata without revealing sensitive ciphertext or plaintexts.
+   * Performs dynamic device trust verification so UI accurately reflects backend authorization.
    */
-  async getAccessMetadata(accessId: string) {
+  async getAccessMetadata(accessId: string, deviceId?: string) {
     const item = await db.findVaultItemByAccessId(accessId);
     if (!item) return null;
 
@@ -133,6 +171,48 @@ export const vaultService = {
     // Maximum Privacy Sender Mode: If sender identity is hidden, redact sender name completely
     const senderIdentityHidden = item.policy.senderIdentityVisibility === 'HIDDEN';
     const displayCreator = senderIdentityHidden ? 'Identity Hidden (Maximum Privacy Mode)' : (item.creatorName || 'Authorized Sender');
+
+    // Deterministic Device Authorization State
+    let deviceVerified = false;
+    let deviceStatus: 'VERIFIED' | 'UNTRUSTED' | 'NOT_REGISTERED' | 'NOT_REQUIRED' = 'NOT_REQUIRED';
+    let deviceMessage = '';
+
+    if (item.policy.registeredDeviceOnly) {
+      if (deviceId) {
+        const registeredDevice = await db.findDevice(deviceId);
+        if (registeredDevice && registeredDevice.trusted) {
+          deviceVerified = true;
+          deviceStatus = 'VERIFIED';
+          deviceMessage = 'Device verified: Authorized trusted hardware fingerprint.';
+        } else if (registeredDevice && !registeredDevice.trusted) {
+          deviceVerified = false;
+          deviceStatus = 'UNTRUSTED';
+          deviceMessage = 'Access denied: Device is registered but marked as untrusted.';
+        } else {
+          deviceVerified = false;
+          deviceStatus = 'NOT_REGISTERED';
+          deviceMessage = 'Access denied: Device is not registered or untrusted for this security policy.';
+        }
+      } else {
+        deviceVerified = false;
+        deviceStatus = 'NOT_REGISTERED';
+        deviceMessage = 'Device verification required: No device fingerprint provided.';
+      }
+    } else if (item.policy.deviceRequired) {
+      if (deviceId) {
+        deviceVerified = true;
+        deviceStatus = 'VERIFIED';
+        deviceMessage = 'Hardware fingerprint recorded.';
+      } else {
+        deviceVerified = false;
+        deviceStatus = 'NOT_REGISTERED';
+        deviceMessage = 'Device fingerprint identification required.';
+      }
+    } else {
+      deviceVerified = true;
+      deviceStatus = 'NOT_REQUIRED';
+      deviceMessage = 'Device policy: Any device permitted.';
+    }
 
     return {
       title: item.title,
@@ -148,10 +228,28 @@ export const vaultService = {
       otpRequired: item.policy.otpRequired,
       deviceRequired: item.policy.deviceRequired,
       registeredDeviceOnly: item.policy.registeredDeviceOnly,
-      isDocumentAttachment: Boolean(item.documentId),
+      deviceVerified,
+      deviceStatus,
+      deviceMessage,
+      isDocumentAttachment: Boolean(item.documentId || item.encryptedPayload.fileName),
+      fileName: item.encryptedPayload.fileName,
+      mimeType: item.encryptedPayload.mimeType,
+      fileSize: item.encryptedPayload.fileSize,
+      fileHash: item.encryptedPayload.fileHash,
       downloadAllowed: item.policy.downloadAllowed !== false,
       zeroPersistence: Boolean(item.policy.zeroPersistence),
       viewDurationSeconds: item.policy.viewDurationSeconds,
+      allowComments: item.policy.allowComments !== false,
+      allowAnnotations: item.policy.allowAnnotations !== false,
+      allowAiAnalysis: item.policy.allowAiAnalysis !== false,
+      allowAiExport: item.policy.allowAiExport !== false,
+      allowPrint: item.policy.allowPrint !== false,
+      allowCopyText: item.policy.allowCopyText !== false,
+      customBranding: item.policy.customBranding,
+      shareTemplate: item.policy.shareTemplate,
+      comments: item.comments || [],
+      extensionRequests: item.extensionRequests || [],
+      downloadRequests: item.downloadRequests || [],
     };
   },
 
@@ -220,8 +318,11 @@ export const vaultService = {
       }
     }
 
-    // 3. Device check
-    if (item.policy.registeredDeviceOnly && params.deviceId) {
+    // 3. Device check: Enforced server-side strictly before reveal
+    if (item.policy.registeredDeviceOnly) {
+      if (!params.deviceId) {
+        return { verified: false, error: 'Access denied: Device is not registered or untrusted', riskLevel: 'HIGH' };
+      }
       const registeredDevice = await db.findDevice(params.deviceId);
       if (!registeredDevice || !registeredDevice.trusted) {
         await db.recordSecurityEvent({
@@ -235,6 +336,8 @@ export const vaultService = {
         });
         return { verified: false, error: 'Access denied: Device is not registered or untrusted', riskLevel: 'HIGH' };
       }
+    } else if (item.policy.deviceRequired && !params.deviceId) {
+      return { verified: false, error: 'Access denied: Device fingerprint is required', riskLevel: 'MEDIUM' };
     }
 
     return { verified: true, riskLevel: 'LOW' };
@@ -253,12 +356,24 @@ export const vaultService = {
   }): Promise<{
     success: boolean;
     secret?: string;
+    file?: any;
+    files?: any[];
     error?: string;
     status: AccessStatus;
     fileName?: string;
     mimeType?: string;
+    fileSize?: number;
+    fileHash?: string;
     downloadAllowed?: boolean;
     viewDurationSeconds?: number;
+    allowComments?: boolean;
+    allowAnnotations?: boolean;
+    allowAiAnalysis?: boolean;
+    allowAiExport?: boolean;
+    allowPrint?: boolean;
+    allowCopyText?: boolean;
+    customBranding?: any;
+    shareTemplate?: string;
   }> {
     // First run verification checks
     const verification = await this.verifyAccess(params);
@@ -309,7 +424,31 @@ export const vaultService = {
 
     // Decrypt authenticated payload using AES-256-GCM
     try {
-      const decryptedSecret = decryptText(consumedItem.encryptedPayload);
+      const decryptedRaw = decryptText(consumedItem.encryptedPayload);
+      let decryptedSecret = decryptedRaw;
+      let fileDataObj: any = undefined;
+      let filesListObj: any[] | undefined = undefined;
+
+      // Unpack structured file package if present
+      if (decryptedRaw.startsWith('{"__vaultType":"SECURE_FILE_PACKAGE"')) {
+        try {
+          const parsed = JSON.parse(decryptedRaw);
+          decryptedSecret = parsed.text || '';
+          fileDataObj = parsed.file;
+          filesListObj = parsed.files;
+        } catch {
+          // Retain raw string if parse fails
+        }
+      } else if (decryptedRaw.startsWith('data:')) {
+        // Direct data URL payload
+        fileDataObj = {
+          name: consumedItem.encryptedPayload.fileName || 'decrypted_file',
+          mimeType: consumedItem.encryptedPayload.mimeType || decryptedRaw.substring(5, decryptedRaw.indexOf(';') > 0 ? decryptedRaw.indexOf(';') : 20),
+          size: consumedItem.encryptedPayload.fileSize || Math.round(decryptedRaw.length * 0.75),
+          hash: consumedItem.encryptedPayload.fileHash,
+          data: decryptedRaw,
+        };
+      }
 
       // Enforce Zero-Persistence if enabled and now fully consumed
       if (consumedItem.policy.zeroPersistence && consumedItem.status === 'CONSUMED') {
@@ -328,11 +467,23 @@ export const vaultService = {
       return {
         success: true,
         secret: decryptedSecret,
+        file: fileDataObj,
+        files: filesListObj,
         status: 'GRANTED',
-        fileName: consumedItem.encryptedPayload.fileName,
-        mimeType: consumedItem.encryptedPayload.mimeType,
+        fileName: fileDataObj?.name || consumedItem.encryptedPayload.fileName,
+        mimeType: fileDataObj?.mimeType || consumedItem.encryptedPayload.mimeType,
+        fileSize: fileDataObj?.size || consumedItem.encryptedPayload.fileSize,
+        fileHash: fileDataObj?.hash || consumedItem.encryptedPayload.fileHash,
         downloadAllowed: consumedItem.policy.downloadAllowed !== false,
         viewDurationSeconds: consumedItem.policy.viewDurationSeconds,
+        allowComments: consumedItem.policy.allowComments !== false,
+        allowAnnotations: consumedItem.policy.allowAnnotations !== false,
+        allowAiAnalysis: consumedItem.policy.allowAiAnalysis !== false,
+        allowAiExport: consumedItem.policy.allowAiExport !== false,
+        allowPrint: consumedItem.policy.allowPrint !== false,
+        allowCopyText: consumedItem.policy.allowCopyText !== false,
+        customBranding: consumedItem.policy.customBranding,
+        shareTemplate: consumedItem.policy.shareTemplate,
       };
     } catch (err) {
       logger.error('Cryptographic decryption failed: potential payload tampering', err);
@@ -402,5 +553,107 @@ export const vaultService = {
     });
 
     return updated;
+  },
+
+  /**
+   * Adds an authenticated receiver/sender comment
+   */
+  async addComment(accessId: string, comment: { authorEmail: string; text: string; pageNumber?: number }) {
+    const item = await db.findVaultItemByAccessId(accessId);
+    if (!item) return { success: false, error: 'Vault item not found' };
+    const comments = item.comments || [];
+    const newComment = {
+      id: crypto.randomUUID(),
+      authorEmail: comment.authorEmail,
+      text: comment.text,
+      pageNumber: comment.pageNumber,
+      createdAt: new Date().toISOString(),
+    };
+    comments.push(newComment);
+    await db.updateVaultItem(item.id, { comments });
+    return { success: true, comment: newComment };
+  },
+
+  /**
+   * Records a receiver access extension request
+   */
+  async requestExtension(accessId: string, req: { requesterEmail: string; reason: string; requestedHours: number }) {
+    const item = await db.findVaultItemByAccessId(accessId);
+    if (!item) return { success: false, error: 'Vault item not found' };
+    const extensionRequests = item.extensionRequests || [];
+    const newReq = {
+      id: crypto.randomUUID(),
+      requesterEmail: req.requesterEmail,
+      reason: req.reason,
+      requestedHours: req.requestedHours || 24,
+      status: 'PENDING' as const,
+      createdAt: new Date().toISOString(),
+    };
+    extensionRequests.push(newReq);
+    await db.updateVaultItem(item.id, { extensionRequests });
+    return { success: true, request: newReq };
+  },
+
+  /**
+   * Records a receiver download permission request
+   */
+  async requestDownload(accessId: string, req: { requesterEmail: string; reason: string }) {
+    const item = await db.findVaultItemByAccessId(accessId);
+    if (!item) return { success: false, error: 'Vault item not found' };
+    const downloadRequests = item.downloadRequests || [];
+    const newReq = {
+      id: crypto.randomUUID(),
+      requesterEmail: req.requesterEmail,
+      reason: req.reason,
+      status: 'PENDING' as const,
+      createdAt: new Date().toISOString(),
+    };
+    downloadRequests.push(newReq);
+    await db.updateVaultItem(item.id, { downloadRequests });
+    return { success: true, request: newReq };
+  },
+
+  /**
+   * Records recipient receipt acknowledgment
+   */
+  async acknowledgeReceipt(accessId: string, userEmail: string) {
+    const item = await db.findVaultItemByAccessId(accessId);
+    if (!item) return { success: false, error: 'Vault item not found' };
+    const acknowledgments = item.acknowledgments || [];
+    acknowledgments.push({
+      userEmail,
+      timestamp: new Date().toISOString(),
+    });
+    await db.updateVaultItem(item.id, { acknowledgments });
+    return { success: true };
+  },
+
+  /**
+   * Extends or shortens server-authoritative expiry
+   */
+  async updateExpiry(itemId: string, newExpiresAt: string) {
+    const item = await db.findVaultItemById(itemId);
+    if (!item) return { success: false, error: 'Vault item not found' };
+    const isNowActive = new Date(newExpiresAt) > new Date() && item.status === 'EXPIRED';
+    await db.updateVaultItem(itemId, {
+      expiresAt: newExpiresAt,
+      status: isNowActive ? 'ACTIVE' : item.status,
+    });
+    return { success: true, expiresAt: newExpiresAt };
+  },
+
+  /**
+   * Updates download permission dynamically
+   */
+  async updateDownloadPermission(itemId: string, allowed: boolean) {
+    const item = await db.findVaultItemById(itemId);
+    if (!item) return { success: false, error: 'Vault item not found' };
+    await db.updateVaultItem(itemId, {
+      policy: {
+        ...item.policy,
+        downloadAllowed: allowed,
+      },
+    });
+    return { success: true, downloadAllowed: allowed };
   },
 };

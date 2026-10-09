@@ -3,6 +3,7 @@
 
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { transferService } from '@/services/transfers/transferService';
 import crypto from 'crypto';
 
 export interface SweeperReport {
@@ -82,17 +83,24 @@ export async function runLifecycleSweeper(): Promise<SweeperReport> {
     }
   }
 
+  // 2. Process and sweep expired in-memory Ephemeral Transfer Sessions
+  const cleanedTransfers = transferService.sweepExpiredSessions();
+  if (cleanedTransfers > 0) {
+    details.push(`Swept ${cleanedTransfers} expired ephemeral transfer session(s) from memory`);
+  }
+
   const report: SweeperReport = {
     timestamp: nowIso,
     expiredVaultItems,
     zeroPersistencePurged,
-    cleanedTransfers: 0,
+    cleanedTransfers,
     details,
   };
 
   logger.info('Lifecycle Sweeper completed', {
     expiredVaultItems,
     zeroPersistencePurged,
+    cleanedTransfers,
   });
 
   return report;

@@ -180,12 +180,30 @@ export const transferService = {
   },
 
   /**
-   * Lists all active transfer sessions for sender
+   * Sweeps and purges expired ephemeral transfer sessions from memory
    */
-  listSessionsForUser(userId: string): Omit<TransferSession, 'payloadBuffer' | 'otpCodeHash'>[] {
+  sweepExpiredSessions(): number {
+    const now = new Date();
+    let purged = 0;
+    for (const [token, session] of activeTransferSessions.entries()) {
+      if (new Date(session.expiresAt) <= now && session.state !== 'COMPLETED') {
+        session.state = 'EXPIRED';
+        session.payloadBuffer = undefined; // Immediate memory wipe
+        activeTransferSessions.delete(token);
+        purged++;
+      }
+    }
+    return purged;
+  },
+
+  /**
+   * Lists active transfer sessions for sender (strictly isolated to owner or admin)
+   */
+  listSessionsForUser(userId: string, role?: string): Omit<TransferSession, 'payloadBuffer' | 'otpCodeHash'>[] {
     const list: Omit<TransferSession, 'payloadBuffer' | 'otpCodeHash'>[] = [];
+    const isAdmin = role === 'ADMIN' || role === 'SECURITY_OFFICER';
     for (const session of activeTransferSessions.values()) {
-      if (session.senderId === userId || userId === 'all') {
+      if (isAdmin || session.senderId === userId) {
         const { payloadBuffer: _, otpCodeHash: __, ...publicData } = session;
         list.push(publicData);
       }

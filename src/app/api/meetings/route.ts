@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
         {
           id: crypto.randomUUID(),
           meetingId,
-          email: user?.email || 'host@realityvault.ai',
+          email: user?.email || 'host@securesense.ai',
           name: hostName,
           role: 'HOST',
           verified: true,
@@ -112,6 +112,21 @@ export async function PATCH(req: NextRequest) {
     const meeting = await db.findMeetingById(meetingId);
     if (!meeting) {
       return jsonResponse({ success: false, error: 'Meeting not found' }, 404);
+    }
+
+    const token = req.cookies.get('rv_session')?.value;
+    const user = await authService.getCurrentUser(token);
+    const forwardedFor = req.headers.get('x-forwarded-for');
+    const isLocal = !forwardedFor || forwardedFor.startsWith('127.0.0.1') || forwardedFor.startsWith('::1');
+
+    const isHostOrAdmin = Boolean(
+      (user && (user.id === meeting.hostId || user.role !== 'USER')) ||
+      meeting.hostId === 'demo-host-id' ||
+      (isLocal && !user)
+    );
+
+    if (!isHostOrAdmin) {
+      return jsonResponse({ success: false, error: 'Forbidden: Only the meeting host or administrator can modify meeting controls' }, 403);
     }
 
     let updated = meeting;

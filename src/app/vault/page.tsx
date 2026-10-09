@@ -17,6 +17,7 @@ import {
   Smartphone
 } from 'lucide-react';
 import { SecurityPolicyData, VaultItem } from '@/types';
+import FileUploadZone, { UploadedFileItem as ZoneUploadedFileItem } from '@/components/upload/FileUploadZone';
 
 export default function VaultPage() {
   const [activeTab, setActiveTab] = useState<'create' | 'list'>('create');
@@ -25,6 +26,7 @@ export default function VaultPage() {
   const [title, setTitle] = useState('');
   const [plaintextSecret, setPlaintextSecret] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [attachedFile, setAttachedFile] = useState<ZoneUploadedFileItem | null>(null);
   const [aiPrompt, setAiPrompt] = useState('Send this contract to my manager. It is highly confidential. He should open it only once from his registered device before tomorrow and require OTP.');
   
   // Policy State
@@ -125,8 +127,8 @@ export default function VaultPage() {
   // Handle Create Vault Item
   const handleCreateVaultItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !plaintextSecret) {
-      alert('Please provide a title and confidential content.');
+    if (!title || (!plaintextSecret && !attachedFile)) {
+      alert('Please provide a title and confidential content or attached file.');
       return;
     }
 
@@ -137,9 +139,14 @@ export default function VaultPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
-          plaintextSecret,
+          plaintextSecret: plaintextSecret || (attachedFile ? `Confidential file attached: ${attachedFile.displayName || attachedFile.originalName}` : ''),
           recipientEmail: recipientEmail || policy.recipientEmail,
           policy,
+          fileName: attachedFile ? (attachedFile.displayName || attachedFile.originalName) : undefined,
+          fileSize: attachedFile ? attachedFile.size : undefined,
+          mimeType: attachedFile ? attachedFile.mimeType : undefined,
+          fileHash: attachedFile ? attachedFile.sha256Hash : undefined,
+          fileData: attachedFile?.base64Data,
         }),
       });
 
@@ -155,6 +162,7 @@ export default function VaultPage() {
         // Clear form
         setTitle('');
         setPlaintextSecret('');
+        setAttachedFile(null);
       } else {
         alert(data.error || 'Failed to create item');
       }
@@ -199,7 +207,7 @@ export default function VaultPage() {
         <div>
           <div className="flex items-center space-x-2">
             <Lock className="w-6 h-6 text-cyan-400" />
-            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">RealityVault Core</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">SecureSense Vault Core</h1>
           </div>
           <p className="text-sm text-slate-400 mt-1">
             Authenticated AES-256-GCM encryption, adaptive policy enforcement, and atomic 1-time lifecycle.
@@ -265,6 +273,35 @@ export default function VaultPage() {
                   onChange={(e) => setPlaintextSecret(e.target.value)}
                   placeholder="Enter sensitive message, credentials, or private contract text..."
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-100 text-sm focus:border-cyan-500 focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Confidential File Attachment Subsystem */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/80">
+                <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                  <span>Confidential Attachment / Document (Optional)</span>
+                  {attachedFile && (
+                    <span className="text-[10px] text-cyan-400 font-mono">
+                      Attached: {attachedFile.displayName} ({(attachedFile.size / 1024).toFixed(1)} KB)
+                    </span>
+                  )}
+                </label>
+                <FileUploadZone
+                  title="Drop Secret File to Encrypt"
+                  description="Attach PDF, confidential key cert, spreadsheet, or scan. Validates SHA-256 and encrypts alongside text payload."
+                  singleFile={true}
+                  onFilesChange={(items) => {
+                    if (items.length > 0) {
+                      const item = items[0];
+                      setAttachedFile(item);
+                      if (!title) setTitle(item.displayName || item.originalName);
+                      if (!plaintextSecret && item.textSnippet) {
+                        setPlaintextSecret(item.textSnippet);
+                      }
+                    } else {
+                      setAttachedFile(null);
+                    }
+                  }}
                 />
               </div>
 

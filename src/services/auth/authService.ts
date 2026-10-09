@@ -29,6 +29,10 @@ export function createSessionToken(user: { id: string; email: string; role: User
 // Verifies session token authenticity and returns parsed user payload
 export function verifySessionToken(token: string): { userId: string; email: string; role: UserRole } | null {
   try {
+    if (db.isTokenRevoked(token)) {
+      return null;
+    }
+
     const [encodedPayload, signature] = token.split('.');
     if (!encodedPayload || !signature) return null;
 
@@ -144,6 +148,14 @@ export const authService = {
 
     const sessionToken = createSessionToken(safeUser);
 
+    // Register active session for privacy controls
+    await db.registerActiveSession({
+      id: crypto.randomUUID(),
+      userId: safeUser.id,
+      token: sessionToken,
+      userAgent: params.deviceName || 'Web Browser',
+    });
+
     await db.recordAuditLog({
       id: crypto.randomUUID(),
       userId: safeUser.id,
@@ -155,6 +167,23 @@ export const authService = {
     });
 
     return { user: safeUser, sessionToken };
+  },
+
+  async logout(token?: string) {
+    if (!token) return;
+    const session = verifySessionToken(token);
+    if (session) {
+      await db.recordAuditLog({
+        id: crypto.randomUUID(),
+        userId: session.userId,
+        userEmail: session.email,
+        action: 'USER_LOGOUT',
+        entityType: 'User',
+        entityId: session.userId,
+        timestamp: new Date().toISOString(),
+      });
+    }
+    await db.revokeToken(token);
   },
 
   async getCurrentUser(token?: string) {

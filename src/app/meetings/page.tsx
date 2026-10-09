@@ -18,17 +18,19 @@ import {
   X
 } from 'lucide-react';
 import { Meeting } from '@/types';
+import FileUploadZone, { UploadedFileItem as ZoneUploadedFileItem } from '@/components/upload/FileUploadZone';
 
 export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showShareDocModal, setShowShareDocModal] = useState<string | null>(null);
+  const [sharedFileItem, setSharedFileItem] = useState<ZoneUploadedFileItem | null>(null);
 
   // Form State
   const [title, setTitle] = useState('');
   const [scheduledFor, setScheduledFor] = useState('2026-10-15T14:00');
-  const [participantsText, setParticipantsText] = useState('ciso@security.org, lead.arch@realityvault.ai');
+  const [participantsText, setParticipantsText] = useState('ciso@security.org, lead.arch@securesense.ai');
   const [enforceDevice, setEnforceDevice] = useState(true);
   const [enforceOtp, setEnforceOtp] = useState(true);
 
@@ -465,6 +467,24 @@ export default function MeetingsPage() {
             </div>
 
             <form onSubmit={handleShareDocSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2">Upload or Select Document to Share</label>
+                <FileUploadZone
+                  title="Drop Presentation or Briefing Document"
+                  description="Supports PDF, Office files, spreadsheets, or images. Access automatically expires upon meeting completion."
+                  singleFile={true}
+                  onFilesChange={(items) => {
+                    if (items.length > 0) {
+                      const item = items[0];
+                      setSharedFileItem(item);
+                      setShareDocTitle(item.displayName || item.originalName);
+                    } else {
+                      setSharedFileItem(null);
+                    }
+                  }}
+                />
+              </div>
+
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">Document Name / Title</label>
                 <input

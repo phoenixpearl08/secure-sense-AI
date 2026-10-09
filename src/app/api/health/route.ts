@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   const responsePayload = {
     status: 'ok',
-    service: 'RealityVault AI + DocSenseAI',
+    service: 'SECURE SENSE AI + DocSenseAI',
     version: '1.0.0-hackathon',
     environment: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     },
     modules: {
       realityVault: 'ACTIVE',
+      secureSense: 'ACTIVE',
       docSenseAI: 'ACTIVE',
       combinedMode: 'ACTIVE',
       aiPolicyEngine: 'ACTIVE',

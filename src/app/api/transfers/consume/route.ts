@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { transferService } from '@/services/transfers/transferService';
-import { jsonResponse } from '@/lib/security/headers';
+import { jsonResponse, checkRateLimit } from '@/lib/security/headers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +11,11 @@ export async function POST(req: NextRequest) {
 
     if (!sessionToken || !otp) {
       return jsonResponse({ success: false, error: 'Session token and OTP are required' }, 400);
+    }
+
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] || '127.0.0.1';
+    if (!checkRateLimit(`consume:${sessionToken}:${ip}`, 60, 60)) {
+      return jsonResponse({ success: false, error: 'Too many consumption attempts. Please wait 1 minute.' }, 429);
     }
 
     const result = await transferService.consumeTransfer({

@@ -5,6 +5,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import {
   User,
   Device,
@@ -26,6 +27,16 @@ interface DatabaseState {
   auditLogs: AuditLog[];
   documents: DocumentData[];
   meetings: Meeting[];
+  revokedTokens?: string[];
+  activeSessions?: Array<{
+    id: string;
+    userId: string;
+    tokenHash: string;
+    createdAt: string;
+    lastActiveAt: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }>;
 }
 
 const DATA_DIR = path.join(process.cwd(), '.data');
@@ -33,7 +44,8 @@ const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 // Memory cache & file synchronization lock
 let inMemoryState: DatabaseState | null = null;
-let writeQueue: Promise<void> = Promise.resolve();
+let isWriting = false;
+let needsWrite = false;
 
 function getInitialState(): DatabaseState {
   return {
@@ -45,12 +57,12 @@ function getInitialState(): DatabaseState {
     auditLogs: [],
     documents: [],
     meetings: [],
+    revokedTokens: [],
+    activeSessions: [],
   };
 }
 
 function loadDatabaseState(): DatabaseState {
-  if (inMemoryState) return inMemoryState;
-
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -64,27 +76,33 @@ function loadDatabaseState(): DatabaseState {
       fs.writeFileSync(DB_FILE, JSON.stringify(inMemoryState, null, 2), 'utf-8');
     }
   } catch (err) {
-    logger.error('Failed to read local database file, initializing clean state', err);
-    inMemoryState = getInitialState();
+    if (!inMemoryState) inMemoryState = getInitialState();
   }
 
   return inMemoryState!;
 }
 
-// Concurrency-safe atomic disk persist
+// Concurrency-safe atomic disk persist with batching to prevent heap exhaustion
 async function persistState(): Promise<void> {
-  const stateCopy = JSON.stringify(inMemoryState, null, 2);
-  writeQueue = writeQueue.then(async () => {
-    try {
+  if (isWriting) {
+    needsWrite = true;
+    return;
+  }
+  isWriting = true;
+  try {
+    do {
+      needsWrite = false;
+      const stateCopy = JSON.stringify(inMemoryState, null, 2);
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
       await fs.promises.writeFile(DB_FILE, stateCopy, 'utf-8');
-    } catch (err) {
-      logger.error('Disk write failed in atomic persist', err);
-    }
-  });
-  await writeQueue;
+    } while (needsWrite);
+  } catch (err) {
+    logger.error('Disk write failed in atomic persist', err);
+  } finally {
+    isWriting = false;
+  }
 }
 
 export const db = {
@@ -376,5 +394,127 @@ export const db = {
   async findDevice(deviceId: string) {
     const state = loadDatabaseState();
     return state.devices.find((d) => d.deviceId === deviceId) || null;
+  },
+
+  async listDevices(): Promise<Device[]> {
+    const state = loadDatabaseState();
+    return [...state.devices];
+  },
+
+  // Token Revocation & Server-Side Session Invalidation
+  async revokeToken(token: string): Promise<void> {
+    const state = loadDatabaseState();
+    if (!state.revokedTokens) state.revokedTokens = [];
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    if (!state.revokedTokens.includes(hash)) {
+      state.revokedTokens.push(hash);
+    }
+    if (state.activeSessions) {
+      state.activeSessions = state.activeSessions.filter((s) => s.tokenHash !== hash);
+    }
+    await persistState();
+  },
+
+  isTokenRevoked(token: string): boolean {
+    const state = loadDatabaseState();
+    if (!state.revokedTokens) return false;
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    return state.revokedTokens.includes(hash);
+  },
+
+  async registerActiveSession(session: {
+    id: string;
+    userId: string;
+    token: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }): Promise<void> {
+    const state = loadDatabaseState();
+    if (!state.activeSessions) state.activeSessions = [];
+    const tokenHash = crypto.createHash('sha256').update(session.token).digest('hex');
+    state.activeSessions.push({
+      id: session.id,
+      userId: session.userId,
+      tokenHash,
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      userAgent: session.userAgent || 'Web Browser',
+      ipAddress: session.ipAddress || '127.0.0.1',
+    });
+    await persistState();
+  },
+
+  async listActiveSessions(userId: string): Promise<any[]> {
+    const state = loadDatabaseState();
+    if (!state.activeSessions) return [];
+    return state.activeSessions
+      .filter((s) => s.userId === userId)
+      .map(({ tokenHash: _, ...rest }) => rest);
+  },
+
+  async revokeUserSessions(userId: string): Promise<number> {
+    const state = loadDatabaseState();
+    if (!state.activeSessions) return 0;
+    const userSessions = state.activeSessions.filter((s) => s.userId === userId);
+    if (!state.revokedTokens) state.revokedTokens = [];
+    for (const s of userSessions) {
+      if (!state.revokedTokens.includes(s.tokenHash)) {
+        state.revokedTokens.push(s.tokenHash);
+      }
+    }
+    state.activeSessions = state.activeSessions.filter((s) => s.userId !== userId);
+    await persistState();
+    return userSessions.length;
+  },
+
+  // Privacy: Complete User Data Purge (Zero-Persistence & GDPR Right to Erasure)
+  async deleteUserData(userId: string): Promise<{ deletedItems: number; deletedDocuments: number; deletedLogs: number }> {
+    const state = loadDatabaseState();
+    const initialItems = state.vaultItems.length;
+    const initialDocs = state.documents.length;
+    const initialLogs = state.auditLogs.length;
+
+    state.vaultItems = state.vaultItems.filter((i) => i.creatorId !== userId);
+    state.documents = state.documents.filter((d) => d.userId !== userId);
+    state.auditLogs = state.auditLogs.filter((l) => l.userId !== userId);
+    state.users = state.users.filter((u) => u.id !== userId);
+    state.devices = state.devices.filter((d) => d.userId !== userId);
+    if (state.activeSessions) {
+      state.activeSessions = state.activeSessions.filter((s) => s.userId !== userId);
+    }
+    await persistState();
+
+    return {
+      deletedItems: initialItems - state.vaultItems.length,
+      deletedDocuments: initialDocs - state.documents.length,
+      deletedLogs: initialLogs - state.auditLogs.length,
+    };
+  },
+
+  // Privacy: User Data Export
+  async exportUserData(userId: string): Promise<any> {
+    const state = loadDatabaseState();
+    const user = state.users.find((u) => u.id === userId);
+    if (!user) return null;
+    const { passwordHash: _, ...safeUser } = user;
+    const userItems = state.vaultItems.filter((i) => i.creatorId === userId).map((i) => {
+      const { encryptedPayload: _, ...meta } = i;
+      return meta;
+    });
+    const userDocs = state.documents.filter((d) => d.userId === userId).map((d) => {
+      const { chunks: _, ...meta } = d;
+      return meta;
+    });
+    const userAudit = state.auditLogs.filter((l) => l.userId === userId);
+    const userDevices = state.devices.filter((d) => d.userId === userId);
+
+    return {
+      exportTimestamp: new Date().toISOString(),
+      user: safeUser,
+      vaultItems: userItems,
+      documents: userDocs,
+      devices: userDevices,
+      auditHistory: userAudit,
+    };
   },
 };

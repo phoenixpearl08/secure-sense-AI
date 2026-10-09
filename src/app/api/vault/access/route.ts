@@ -6,12 +6,13 @@ import { jsonResponse } from '@/lib/security/headers';
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const accessId = searchParams.get('id');
+  const deviceId = searchParams.get('deviceId') || undefined;
 
   if (!accessId) {
     return jsonResponse({ success: false, error: 'Access identifier is required' }, 400);
   }
 
-  const metadata = await vaultService.getAccessMetadata(accessId);
+  const metadata = await vaultService.getAccessMetadata(accessId, deviceId);
 
   if (!metadata) {
     return jsonResponse({ success: false, error: 'Secure item not found or invalid link' }, 404);

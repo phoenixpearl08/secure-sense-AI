@@ -18,16 +18,34 @@ export async function POST(req: NextRequest) {
     const zeroPersistence = body.zeroPersistence ?? true;
     const expiresInMinutes = body.expiresInMinutes || 10;
     const otpCode = body.otpCode;
+    const rawData = body.payloadBufferBase64 || payloadData;
 
-    if (!payloadData) {
+    if (!rawData) {
       return jsonResponse({ success: false, error: 'Payload data is required' }, 400);
     }
 
-    const buffer = Buffer.from(payloadData, 'utf-8');
+    const isBase64 = body.isBase64 || Boolean(body.payloadBufferBase64) || (typeof rawData === 'string' && rawData.startsWith('data:'));
+    let buffer: Buffer;
+    let storedPayload: string;
+
+    if (isBase64) {
+      const base64Clean = (typeof rawData === 'string' ? rawData : '').replace(/^data:[^;]+;base64,/, '');
+      buffer = Buffer.from(base64Clean, 'base64');
+    } else {
+      buffer = Buffer.from(rawData, 'utf-8');
+    }
+
     const validation = validateFileBuffer(buffer, fileName, mimeType || 'text/plain');
 
     if (!validation.valid) {
       return jsonResponse({ success: false, error: validation.error || 'Invalid file payload' }, 400);
+    }
+
+    if (isBase64) {
+      const base64Clean = (typeof rawData === 'string' ? rawData : '').replace(/^data:[^;]+;base64,/, '');
+      storedPayload = `data:${validation.detectedMimeType};base64,${base64Clean}`;
+    } else {
+      storedPayload = rawData;
     }
 
     const senderId = user ? user.id : 'demo-sender';
@@ -44,7 +62,7 @@ export async function POST(req: NextRequest) {
       otpCode,
       zeroPersistence: zeroPersistence ?? true,
       expiresInMinutes: expiresInMinutes || 10,
-      payloadData,
+      payloadData: storedPayload,
     });
 
     const accessUrl = `/transfers/receive?token=${session.sessionToken}`;

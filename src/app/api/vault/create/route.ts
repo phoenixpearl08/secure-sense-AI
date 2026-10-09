@@ -21,10 +21,12 @@ export async function POST(req: NextRequest) {
       mimeType,
       fileSize,
       fileHash,
+      fileData,
+      files,
     } = body;
 
-    if (!title || !plaintextSecret) {
-      return jsonResponse({ success: false, error: 'Title and confidential content are required' }, 400);
+    if (!title || (!plaintextSecret && !fileData && (!files || files.length === 0))) {
+      return jsonResponse({ success: false, error: 'Title and confidential content or file attachment are required' }, 400);
     }
 
     // Strictly validate policy schema
@@ -45,6 +47,8 @@ export async function POST(req: NextRequest) {
       mimeType,
       fileSize,
       fileHash,
+      fileData,
+      files,
     });
 
     // Generate secure QR code containing non-enumerable access URL

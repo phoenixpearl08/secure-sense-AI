@@ -8,7 +8,17 @@ export async function GET(req: NextRequest) {
   const token = req.cookies.get('rv_session')?.value;
   const user = await authService.getCurrentUser(token);
 
-  const items = await db.listVaultItems(user ? user.id : undefined);
+  let items: import('@/types').VaultItem[] = [];
+  if (user) {
+    if (user.role !== 'USER') {
+      items = await db.listVaultItems();
+    } else {
+      items = await db.listVaultItems(user.id);
+    }
+  } else {
+    // Enforce tenant isolation: unauthenticated queries only see anonymous demo items
+    items = await db.listVaultItems('demo-anonymous-user');
+  }
 
   // Return items without ciphertext
   const safeItems = items.map((i) => ({

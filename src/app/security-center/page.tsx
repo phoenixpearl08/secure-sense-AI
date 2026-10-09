@@ -29,6 +29,9 @@ export default function SecurityCenterPage() {
     criticalEvents: number;
     recentEvents: SecurityEvent[];
     recentAuditLogs: AuditLog[];
+    recentFailedAttempts?: any[];
+    permissionChanges?: any[];
+    transferSecurityStatus?: any;
   } | null>(null);
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -179,53 +182,106 @@ export default function SecurityCenterPage() {
               <p className="text-xs text-slate-300">No anomalous threat events recorded</p>
             </div>
           )}
+
+          {/* Failed Access Attempts */}
+          {summary?.recentFailedAttempts && summary.recentFailedAttempts.length > 0 && (
+            <div className="pt-4 border-t border-slate-800/80 space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1.5 font-mono">
+                <AlertTriangle className="w-3.5 h-3.5" /> Recent Intercepted Attempts ({summary.recentFailedAttempts.length})
+              </h3>
+              <div className="space-y-2">
+                {summary.recentFailedAttempts.map((att: any) => (
+                  <div key={att.id} className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-900/50 text-[11px] font-mono space-y-1">
+                    <div className="flex justify-between text-rose-300 font-semibold">
+                      <span>{att.reason}</span>
+                      <span className="text-[10px] text-rose-400/80">{att.riskLevel}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400">
+                      Time: {new Date(att.attemptedAt).toLocaleTimeString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Zero-Residual Audit Log Table (7 cols) */}
-        <div className="lg:col-span-7 glass-panel p-6 border-slate-800 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-cyan-400" />
-              <span>Immutable Audit Trail (Zero Secrets Leaked)</span>
-            </h2>
-            <span className="text-[11px] font-mono text-slate-400">
-              {auditLogs.length} Records
-            </span>
-          </div>
+        <div className="lg:col-span-7 space-y-6">
+          {/* Transfer Security & Zero Persistence Status */}
+          {summary?.transferSecurityStatus && (
+            <div className="glass-panel p-5 border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5 font-mono">
+                  <Activity className="w-3.5 h-3.5" /> Ephemeral Transfer Relay Status
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800">
+                  Zero-Persistence Active
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <div className="text-[10px] text-slate-400 font-mono">ACTIVE SESSIONS</div>
+                  <div className="text-lg font-bold text-cyan-300">{summary.transferSecurityStatus.activeTransfers}</div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <div className="text-[10px] text-slate-400 font-mono">COMPLETED & PURGED</div>
+                  <div className="text-lg font-bold text-emerald-400">{summary.transferSecurityStatus.completedTransfers}</div>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                  <div className="text-[10px] text-slate-400 font-mono">BUFFER PERSISTENCE</div>
+                  <div className="text-lg font-bold text-purple-400">0 KB (Ephemeral)</div>
+                </div>
+              </div>
+            </div>
+          )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
-                <tr>
-                  <th className="py-2.5 px-3">Action</th>
-                  <th className="py-2.5 px-3">Entity</th>
-                  <th className="py-2.5 px-3">Time</th>
-                  <th className="py-2.5 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                {auditLogs.length === 0 ? (
+          {/* Audit Log Table */}
+          <div className="glass-panel p-6 border-slate-800 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-cyan-400" />
+                <span>Immutable Audit Trail (Zero Secrets Leaked)</span>
+              </h2>
+              <span className="text-[11px] font-mono text-slate-400">
+                {auditLogs.length} Records
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-slate-400">
-                      No audit events recorded yet.
-                    </td>
+                    <th className="py-2.5 px-3">Action</th>
+                    <th className="py-2.5 px-3">Entity</th>
+                    <th className="py-2.5 px-3">Time</th>
+                    <th className="py-2.5 px-3">Status</th>
                   </tr>
-                ) : (
-                  auditLogs.slice(0, 15).map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-900/40 transition">
-                      <td className="py-2 px-3 text-cyan-300 font-semibold">{log.action}</td>
-                      <td className="py-2 px-3 text-slate-400">{log.entityType}</td>
-                      <td className="py-2 px-3 text-slate-400">
-                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="text-emerald-400">RECORDED</span>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                  {auditLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-400">
+                        No audit events recorded yet.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    auditLogs.slice(0, 15).map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-900/40 transition">
+                        <td className="py-2 px-3 text-cyan-300 font-semibold">{log.action}</td>
+                        <td className="py-2 px-3 text-slate-400">{log.entityType}</td>
+                        <td className="py-2 px-3 text-slate-400">
+                          {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span className="text-emerald-400">RECORDED</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

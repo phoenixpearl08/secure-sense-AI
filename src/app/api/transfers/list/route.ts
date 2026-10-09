@@ -6,8 +6,9 @@ import { jsonResponse } from '@/lib/security/headers';
 export async function GET(req: NextRequest) {
   const token = req.cookies.get('rv_session')?.value;
   const user = await authService.getCurrentUser(token);
-  const userId = user ? user.id : 'all';
+  const userId = user ? user.id : 'demo-anonymous-user';
+  const role = user ? user.role : 'USER';
 
-  const sessions = transferService.listSessionsForUser(userId);
+  const sessions = transferService.listSessionsForUser(userId, role);
   return jsonResponse({ success: true, data: sessions }, 200);
 }

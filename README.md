@@ -1,36 +1,103 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SECURE SENSE
+
+**Intelligent Security & Document Intelligence**
+
+SECURE SENSE is a zero-trust, privacy-first cybersecurity platform combining authenticated cryptography (AES-256-GCM), ephemeral encrypted document transmission, AI-driven document intelligence (DocSenseAI), and granular privacy compliance controls.
+
+---
+
+## Key Capabilities
+
+1. **DocSenseAI (Document Intelligence & Grounded Q&A):**
+   - Heuristic and OCR text extraction across PDF, DOCX, XLSX, TXT, and scanned image formats.
+   - Contextual obligation, deadline, and financial breakdown extraction with zero-hallucination domain boundary guards.
+   - Grounded Q&A engine with source citation and prompt-injection defense.
+
+2. **Secure Vault & Send Wizard:**
+   - Client and server-side authenticated encryption using **AES-256-GCM** with unique 96-bit IVs and 128-bit authentication tags.
+   - Granular recipient verification, out-of-band One-Time Password (OTP) dispatch, and zero-trust device hardware authorization.
+   - Atomic one-time view enforcement protecting against concurrent race conditions.
+
+3. **Ephemeral Real-Time File Transfers:**
+   - In-memory zero-persistence transfer relay.
+   - Single-use consumption guarantees with automatic buffer shredding upon read or expiry.
+
+4. **Security Command Center:**
+   - Real-time telemetry monitoring active transfers, failed access attempts, and permission mutations.
+   - Immutable audit trail redacting credentials and PII.
+
+5. **Privacy Control Center & Compliance:**
+   - GDPR/CCPA data portability export (`/api/privacy/export`).
+   - Verified Right to Erasure workflow (`/api/privacy/delete`).
+   - Active session tracking and remote device session revocation.
+
+6. **File Threat Scanner & Privacy Guard:**
+   - Heuristic binary malware analysis and executable rejection (MZ/ELF/Java bytecode).
+   - Embedded polyglot script smuggling detection in document payloads.
+   - Pre-send Privacy Guard identifying payment cards (Luhn validated), SSNs, RSA private keys, and cloud secrets with required user confirmation.
+
+---
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router, Turbopack)
+- **UI:** React 19, TailwindCSS, Lucide Icons
+- **Cryptography:** Node.js native `crypto` (AES-256-GCM, Scrypt key derivation)
+- **Database & Storage:** PostgreSQL with Prisma Client OR zero-configuration atomic local persistence fallback
+- **Language:** TypeScript 5
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+- Node.js 20+ / npm 10+
 
+### 2. Environment Configuration
+Copy the template to `.env.local`:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
+```
+Provide your 32-character master secrets:
+- `VAULT_MASTER_KEY`
+- `SESSION_SECRET`
+
+### 3. Install Dependencies & Build
+```bash
+npm install
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 4. Run Development Server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Verification & Test Suites
 
-## Learn More
+SECURE SENSE includes comprehensive automated end-to-end verification suites:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+# 1. Comprehensive Security Hardening & Privacy Expansion Test Suite
+node tests/security-privacy-expansion-test.mjs
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# 2. DocSenseAI Intelligence & Domain Guard Verification Suite
+node tests/docsense-intelligence-test.mjs
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# 3. Encrypted File Transfer Integrity & Cryptographic Parity Suite
+node tests/file-transfer-integrity-test.mjs
 
-## Deploy on Vercel
+# 4. Production End-to-End & Concurrency Stress Test Suite
+node tests/verify-e2e.mjs
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Security Policy
+
+- **Zero Secret Exposure:** Keys, credentials, OTP passcodes, and decrypted plaintexts are strictly excluded from client telemetry and server logs.
+- **Server-Side Enforcement:** All access controls, expiration policies, and download restrictions are strictly validated on the server.
+- **Tamper Protection:** Payloads are protected by AES-256-GCM 128-bit authentication tags, immediately invalidating tampered data.

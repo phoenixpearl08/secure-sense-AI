@@ -15,11 +15,14 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { TransferSession } from '@/types';
+import FileUploadZone, { UploadedFileItem as ZoneUploadedFileItem } from '@/components/upload/FileUploadZone';
 
 export default function TransfersPage() {
   const [activeTab, setActiveTab] = useState<'create' | 'list'>('create');
   const [fileName, setFileName] = useState('confidential_archive.zip');
   const [payloadText, setPayloadText] = useState('HIGH_SECURITY_SOURCE_ARCHIVE_CONTENT_PAYLOAD_2026');
+  const [uploadedBase64, setUploadedBase64] = useState<string | null>(null);
+  const [detectedMime, setDetectedMime] = useState<string>('text/plain');
   const [receiverEmail, setReceiverEmail] = useState('');
   const [zeroPersistence, setZeroPersistence] = useState(true);
   const [expiresInMinutes, setExpiresInMinutes] = useState(10);
@@ -96,8 +99,9 @@ export default function TransfersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           fileName,
-          payloadData: payloadText,
-          mimeType: 'text/plain',
+          payloadData: uploadedBase64 || payloadText,
+          isBase64: Boolean(uploadedBase64),
+          mimeType: detectedMime || 'text/plain',
           receiverEmail: receiverEmail || undefined,
           zeroPersistence,
           expiresInMinutes,
@@ -177,6 +181,32 @@ export default function TransfersPage() {
               </div>
             )}
 
+            {/* Reusable File & Folder Upload Component */}
+            <div className="mb-6">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                1. Select or Drop File(s) / Folder Package
+              </label>
+              <FileUploadZone
+                title="Drop File or Directory for Ephemeral Transmission"
+                description="Select or drop any document, image, media, or folder. Validates SHA-256 and transmits via in-memory zero-persistence relay."
+                singleFile={false}
+                onFilesChange={(items) => {
+                  if (items.length > 0) {
+                    const primary = items[0];
+                    setFileName(primary.displayName || primary.originalName);
+                    setDetectedMime(primary.mimeType || 'application/octet-stream');
+                    if (primary.base64Data) {
+                      setUploadedBase64(primary.base64Data);
+                      setPayloadText(primary.textSnippet || `[Binary File Package: ${primary.displayName}, ${primary.size} bytes, SHA-256: ${primary.sha256Hash || 'verified'}]`);
+                    } else if (primary.textSnippet) {
+                      setUploadedBase64(null);
+                      setPayloadText(primary.textSnippet);
+                    }
+                  }
+                }}
+              />
+            </div>
+
             <form onSubmit={handleCreateTransfer} className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
@@ -194,12 +224,15 @@ export default function TransfersPage() {
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Confidential Content / Data Buffer
+                  Confidential Content / Data Buffer {uploadedBase64 ? '(Binary Buffer Loaded)' : ''}
                 </label>
                 <textarea
                   rows={4}
                   value={payloadText}
-                  onChange={(e) => setPayloadText(e.target.value)}
+                  onChange={(e) => {
+                    setPayloadText(e.target.value);
+                    setUploadedBase64(null);
+                  }}
                   placeholder="Paste confidential data payload..."
                   required
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm font-mono text-cyan-300 focus:outline-none focus:border-cyan-500/50"

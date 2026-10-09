@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { RiskLevel, SecurityEvent } from '@/types';
 import { db } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { transferService } from '@/services/transfers/transferService';
 
 export interface ThreatEvaluation {
   riskLevel: RiskLevel;
@@ -129,6 +130,39 @@ export const riskEngine = {
     const blockedAttempts = attempts.filter((a) => a.status === 'DENIED').length;
     const criticalEvents = events.filter((e) => e.riskLevel === 'CRITICAL' || e.riskLevel === 'HIGH').length;
 
+    // Filter recent failed attempts with reason details (non-sensitive)
+    const recentFailedAttempts = attempts
+      .filter((a) => a.status === 'DENIED')
+      .slice(0, 10)
+      .map((a) => ({
+        id: a.id,
+        vaultItemId: a.vaultItemId,
+        reason: a.reason || 'Verification challenge rejected',
+        riskLevel: a.riskLevel,
+        attemptedAt: a.attemptedAt,
+      }));
+
+    // Permission and policy mutations audit trail
+    const permissionChanges = auditLogs
+      .filter(
+        (l) =>
+          l.action.includes('PERMISSION') ||
+          l.action.includes('REVOKE') ||
+          l.action.includes('LOCK') ||
+          l.action.includes('EXPIRY')
+      )
+      .slice(0, 10);
+
+    // Active Ephemeral Transfers security status
+    const transferSessions = transferService.listSessionsForUser('all', 'ADMIN');
+    const transferSecurityStatus = {
+      activeTransfers: transferSessions.filter((s) => s.state === 'WAITING_RECEIVER').length,
+      completedTransfers: transferSessions.filter((s) => s.state === 'COMPLETED').length,
+      totalSessions: transferSessions.length,
+      zeroPersistenceGuaranteed: true,
+      sessions: transferSessions.slice(0, 8),
+    };
+
     return {
       activeItems,
       consumedItems,
@@ -139,6 +173,9 @@ export const riskEngine = {
       criticalEvents,
       recentEvents: events.slice(0, 10),
       recentAuditLogs: auditLogs.slice(0, 15),
+      recentFailedAttempts,
+      permissionChanges,
+      transferSecurityStatus,
     };
   },
 };

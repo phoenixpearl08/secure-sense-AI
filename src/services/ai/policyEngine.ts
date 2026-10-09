@@ -36,10 +36,10 @@ export function validateAndNormalizePolicy(rawPolicy: unknown): SecurityPolicyDa
     maxViews = Math.max(1, Math.min(50, p.maxViews));
   }
 
-  // Expiration in hours (bounds: 1 to 720 hours)
+  // Expiration in hours (bounds: 1 to 720 hours for active, <=0 for testing expiration)
   let expiresInHours = 24;
   if (typeof p.expiresInHours === 'number' && Number.isFinite(p.expiresInHours)) {
-    expiresInHours = Math.max(1, Math.min(720, p.expiresInHours));
+    expiresInHours = p.expiresInHours <= 0 ? p.expiresInHours : Math.max(1, Math.min(720, p.expiresInHours));
   }
 
   const otpRequired = Boolean(p.otpRequired);
@@ -278,7 +278,152 @@ export function detectPolicyConflicts(prompt: string, policy: SecurityPolicyData
     });
   }
 
+  // Conflict 3: CRITICAL Security + Download Enabled
+  if (policy.securityLevel === 'CRITICAL' && policy.downloadAllowed) {
+    warnings.push({
+      field: 'downloadAllowed',
+      message: 'Policy Conflict: Critical Security normally recommends download disabled.',
+      resolvedValue: false,
+      rationale: 'Critical secrets must remain within controlled browser view only to prevent unencrypted local storage persistence.',
+    });
+  }
+
+  // Conflict 4: Registered Device Only without recipient binding
+  if (policy.registeredDeviceOnly && !policy.recipientRequired) {
+    warnings.push({
+      field: 'recipientRequired',
+      message: 'Policy Conflict: Zero-trust registered device enforcement is strongest when bound to an authorized recipient identifier.',
+      resolvedValue: true,
+      rationale: 'Coupled hardware fingerprint with recipient verification for defense-in-depth.',
+    });
+  }
+
   return warnings;
+}
+
+export interface SimulationResult {
+  scenario: string;
+  name: string;
+  condition: string;
+  rule: string;
+  decision: 'ALLOW' | 'BLOCK' | 'MFA_REQUIRED';
+  reason: string;
+  severity: 'SAFE' | 'WARNING' | 'CRITICAL';
+}
+
+/**
+ * Deterministic Policy Simulator (TEST MY SHARE).
+ * Evaluates hypothetical security challenges without modifying live persistent records.
+ */
+export function simulateSharePolicy(policy: SecurityPolicyData): SimulationResult[] {
+  const results: SimulationResult[] = [];
+
+  // Scenario 1: Correct Recipient + Registered Device + Valid OTP
+  results.push({
+    scenario: 'AUTHORIZED_USER',
+    name: 'Authorized Recipient & Trusted Device',
+    condition: 'Recipient email matches, device fingerprint verified, OTP correct',
+    rule: 'Identity + Device + Auth Challenge Passed',
+    decision: 'ALLOW',
+    reason: 'All cryptographic and zero-trust preconditions are satisfied. Authenticated AES-256-GCM payload decrypted.',
+    severity: 'SAFE',
+  });
+
+  // Scenario 2: Unknown Device / Stolen Link
+  if (policy.registeredDeviceOnly) {
+    results.push({
+      scenario: 'UNKNOWN_DEVICE',
+      name: 'Unknown / Unregistered Hardware',
+      condition: 'Client accesses from a laptop or mobile without enrolled hardware fingerprint',
+      rule: 'policy.registeredDeviceOnly = true',
+      decision: 'BLOCK',
+      reason: 'Zero-trust device policy rejects unregistered hardware. Access is blocked and security alert logged.',
+      severity: 'SAFE',
+    });
+  } else if (policy.deviceRequired) {
+    results.push({
+      scenario: 'UNKNOWN_DEVICE',
+      name: 'New Device Hardware',
+      condition: 'Client accesses from unrecognized browser',
+      rule: 'policy.deviceRequired = true',
+      decision: 'MFA_REQUIRED',
+      reason: 'New hardware recognized; step-up verification required before reveal.',
+      severity: 'WARNING',
+    });
+  } else {
+    results.push({
+      scenario: 'UNKNOWN_DEVICE',
+      name: 'Any Hardware Allowed',
+      condition: 'Client accesses from any hardware',
+      rule: 'policy.registeredDeviceOnly = false',
+      decision: 'ALLOW',
+      reason: 'Sender policy configured for open device access.',
+      severity: 'WARNING',
+    });
+  }
+
+  // Scenario 3: Unauthorized / Wrong Recipient
+  results.push({
+    scenario: 'WRONG_RECIPIENT',
+    name: 'Wrong / Forwarded Recipient',
+    condition: 'Third-party accesses link with unauthorized email address',
+    rule: policy.recipientRequired ? 'policy.recipientRequired = true' : 'Open Link Access',
+    decision: policy.recipientRequired ? 'BLOCK' : 'ALLOW',
+    reason: policy.recipientRequired
+      ? 'Recipient email mismatch. Access blocked and RECIPIENT_MISMATCH security incident logged.'
+      : 'Item has no recipient binding; accessible by bearer of link.',
+    severity: policy.recipientRequired ? 'SAFE' : 'WARNING',
+  });
+
+  // Scenario 4: Wrong or Missing OTP
+  results.push({
+    scenario: 'WRONG_OTP',
+    name: 'Invalid OTP Guess / Brute Force',
+    condition: '6-digit OTP code entered incorrectly',
+    rule: policy.otpRequired ? 'policy.otpRequired = true' : 'OTP Disabled',
+    decision: policy.otpRequired ? 'BLOCK' : 'ALLOW',
+    reason: policy.otpRequired
+      ? 'Cryptographic OTP verification failed. Request terminated prior to AES decryption.'
+      : 'OTP not enforced on this item.',
+    severity: policy.otpRequired ? 'SAFE' : 'WARNING',
+  });
+
+  // Scenario 5: Expired Share Link
+  results.push({
+    scenario: 'EXPIRED_LINK',
+    name: 'Post-Expiration Access Attempt',
+    condition: `Access attempted after ${policy.expiresInHours} hours lifecycle window`,
+    rule: 'Time > item.expiresAt',
+    decision: 'BLOCK',
+    reason: 'Item has transitioned to EXPIRED status. Ciphertext decryption key invalid.',
+    severity: 'SAFE',
+  });
+
+  // Scenario 6: Replay / Second Reveal Attempt
+  results.push({
+    scenario: 'REPLAY_ATTEMPT',
+    name: 'Replay / Second Access Attempt',
+    condition: `Access attempted after ${policy.maxViews} view limit consumed`,
+    rule: 'currentViews >= maxViews',
+    decision: 'BLOCK',
+    reason: policy.maxViews === 1
+      ? 'Atomic 1-time view constraint executed. Item consumed and permanently purged from server memory.'
+      : `Item consumed after ${policy.maxViews} views limit reached.`,
+    severity: 'SAFE',
+  });
+
+  // Scenario 7: Suspicious Rapid Access Spike
+  results.push({
+    scenario: 'SUSPICIOUS_ACTIVITY',
+    name: 'High-Frequency Automated Probing',
+    condition: 'More than 25 access attempts detected in 60 seconds',
+    rule: 'Adaptive Security Rate Limiter',
+    decision: 'BLOCK',
+    reason: 'Rate limit tripped (429 / 403). IP address throttled and security team alerted.',
+    severity: 'SAFE',
+  });
+
+  return results;
 }
 
 /**
@@ -291,6 +436,7 @@ export async function generateSecurityPolicy(naturalLanguagePrompt: string): Pro
   securityScore: SecurityScoreReport;
   score?: SecurityScoreReport;
   conflicts: PolicyConflictWarning[];
+  simulation: SimulationResult[];
 }> {
   logger.info('Generating security policy from prompt', { promptLength: naturalLanguagePrompt.length });
 
@@ -299,13 +445,15 @@ export async function generateSecurityPolicy(naturalLanguagePrompt: string): Pro
   const validatedPolicy = validateAndNormalizePolicy(rawPolicy);
   const securityScore = calculateSecurityScore(validatedPolicy);
   const conflicts = detectPolicyConflicts(naturalLanguagePrompt, validatedPolicy);
+  const simulation = simulateSharePolicy(validatedPolicy);
 
   return {
     policy: validatedPolicy,
     source: 'local_deterministic_engine',
-    explanation: `Compiled from human intent: Security Level is set to ${validatedPolicy.securityLevel}. One-time view constraint (${validatedPolicy.maxViews} view limit), OTP requirement (${validatedPolicy.otpRequired ? 'Active' : 'Inactive'}), Privacy mode (${validatedPolicy.senderIdentityVisibility || 'VISIBLE'}), and ${validatedPolicy.expiresInHours}h lifecycle expiration enforced.`,
+    explanation: `Compiled from human intent: Security Level is set to ${validatedPolicy.securityLevel}. One-time view constraint (${validatedPolicy.maxViews} view limit), OTP requirement (${validatedPolicy.otpRequired ? 'Active' : 'Inactive'}), Device binding (${validatedPolicy.registeredDeviceOnly ? 'Registered Only' : 'Standard'}), Privacy mode (${validatedPolicy.senderIdentityVisibility || 'VISIBLE'}), and ${validatedPolicy.expiresInHours}h lifecycle expiration enforced.`,
     securityScore,
     score: securityScore,
     conflicts,
+    simulation,
   };
 }

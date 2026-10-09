@@ -36,6 +36,18 @@ export default function LandingPage() {
     <div className="space-y-16 py-8">
       {/* Hero Section */}
       <section className="relative text-center space-y-6 pt-6">
+        {/* Brand Logo Hero Badge */}
+        <div className="flex justify-center mb-3">
+          <div className="relative group p-2.5 rounded-3xl bg-slate-900/70 border border-cyan-500/40 backdrop-blur-xl shadow-2xl shadow-cyan-500/25">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/logo.png"
+              alt="Secure Sense AI"
+              className="w-28 h-28 sm:w-36 sm:h-36 object-contain drop-shadow-[0_0_25px_rgba(6,182,212,0.45)] transition duration-500 group-hover:scale-105"
+            />
+          </div>
+        </div>
+
         <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-400 text-xs font-mono tracking-wide">
           <Sparkles className="w-3.5 h-3.5" />
           <span>CYBERSECURITY + ENTERPRISE AI INFRASTRUCTURE</span>
@@ -159,13 +171,13 @@ export default function LandingPage() {
 
       {/* Dual Modules Spotlight */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
-        {/* Module 1: RealityVault AI */}
+        {/* Module 1: SecureSense Vault */}
         <div className="glass-panel p-6 sm:p-8 space-y-4 border-cyan-500/30 flex flex-col justify-between">
           <div className="space-y-4">
             <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
               <Lock className="w-6 h-6" />
             </div>
-            <h3 className="text-xl font-bold text-white">RealityVault AI</h3>
+            <h3 className="text-xl font-bold text-white">SecureSense Vault</h3>
             <p className="text-sm text-slate-400">
               High-assurance secure communication channel with non-enumerable tokens, verified recipient checks, OTP challenges, and hardware fingerprint checks.
             </p>
@@ -188,7 +200,7 @@ export default function LandingPage() {
             href="/vault"
             className="inline-flex items-center justify-between px-4 py-2.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-700/50 text-cyan-300 text-sm font-medium transition"
           >
-            <span>Open RealityVault</span>
+            <span>Open Secure Vault</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
@@ -249,6 +261,109 @@ export default function LandingPage() {
           </Link>
         </div>
       </section>
+
+      {/* Security Architecture & Integration Matrix Highlights */}
+      <section className="max-w-5xl mx-auto space-y-6 pt-4">
+        <div className="text-center space-y-1.5">
+          <h3 className="text-xl font-bold text-white">Enterprise Security Architecture</h3>
+          <p className="text-xs text-slate-400">
+            Defense-in-depth zero-trust pipeline designed for mission-critical document workflows.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
+          <div className="glass-panel p-4 border-slate-800 space-y-2">
+            <div className="flex items-center gap-2 text-cyan-400 font-bold">
+              <Lock className="w-4 h-4" />
+              <span>AES-256-GCM</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              Authenticated payload encryption using unique Initialization Vectors and cryptographic MAC tags for tamper-evidence.
+            </p>
+          </div>
+
+          <div className="glass-panel p-4 border-slate-800 space-y-2">
+            <div className="flex items-center gap-2 text-indigo-400 font-bold">
+              <Cpu className="w-4 h-4" />
+              <span>Adaptive AI Policy</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              Dynamic rule compilation translating natural language operator constraints into deterministic backend access policies.
+            </p>
+          </div>
+
+          <div className="glass-panel p-4 border-slate-800 space-y-2">
+            <div className="flex items-center gap-2 text-emerald-400 font-bold">
+              <Shield className="w-4 h-4" />
+              <span>Zero-Trust Binding</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              Enforces hardware fingerprint enrollment and out-of-band OTP verification before granting atomic payload access.
+            </p>
+          </div>
+
+          <div className="glass-panel p-4 border-slate-800 space-y-2">
+            <div className="flex items-center gap-2 text-rose-400 font-bold">
+              <Flame className="w-4 h-4" />
+              <span>Cryptographic Destruction</span>
+            </div>
+            <p className="text-slate-400 leading-relaxed">
+              Zero-persistence purging that overwrites ciphertext and expires tokens the instant single-use limits or lifecycles expire.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Public Platform Footer */}
+      <footer className="pt-12 border-t border-slate-800 max-w-5xl mx-auto space-y-8 text-xs text-slate-400">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="space-y-2.5">
+            <div className="text-slate-200 font-bold uppercase tracking-wider text-[11px] font-mono">Platform</div>
+            <ul className="space-y-1.5">
+              <li><Link href="/dashboard" className="hover:text-cyan-400 transition">Command Dashboard</Link></li>
+              <li><Link href="/docsense" className="hover:text-cyan-400 transition">DocSenseAI Intelligence</Link></li>
+              <li><Link href="/vault" className="hover:text-cyan-400 transition">Secure Vault Enclave</Link></li>
+              <li><Link href="/combined" className="hover:text-cyan-400 transition">Combined Pipeline</Link></li>
+              <li><Link href="/transfers" className="hover:text-cyan-400 transition">D2D Ephemeral Relay</Link></li>
+            </ul>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="text-slate-200 font-bold uppercase tracking-wider text-[11px] font-mono">Operations</div>
+            <ul className="space-y-1.5">
+              <li><Link href="/security-center" className="hover:text-cyan-400 transition">Security Center & Audit</Link></li>
+              <li><Link href="/meetings" className="hover:text-cyan-400 transition">Secure Meetings Enclave</Link></li>
+              <li><Link href="/api/health" target="_blank" className="hover:text-cyan-400 transition">API Health & Telemetry</Link></li>
+            </ul>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="text-slate-200 font-bold uppercase tracking-wider text-[11px] font-mono">Authentication</div>
+            <ul className="space-y-1.5">
+              <li><Link href="/login" className="hover:text-cyan-400 transition">Identity Login</Link></li>
+              <li><Link href="/register" className="hover:text-cyan-400 transition">Register Operator</Link></li>
+              <li><Link href="/forgot-password" className="hover:text-cyan-400 transition">Account Recovery</Link></li>
+            </ul>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="text-slate-200 font-bold uppercase tracking-wider text-[11px] font-mono">Governance</div>
+            <ul className="space-y-1.5">
+              <li><Link href="/terms" className="hover:text-cyan-400 transition">Terms & Cryptographic Rules</Link></li>
+              <li><Link href="/privacy" className="hover:text-cyan-400 transition">Privacy & Zero-Knowledge Policy</Link></li>
+              <li><span className="text-slate-500 font-mono text-[10px]">Strict Tenant Isolation &bull; No Model Training</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500 font-mono text-[11px]">
+          <div>&copy; 2026 SECURE SENSE AI Systems Inc. All rights reserved.</div>
+          <div className="flex items-center gap-2 text-cyan-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>Zero-Trust Enclave Active</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

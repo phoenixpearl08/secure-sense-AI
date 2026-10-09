@@ -59,9 +59,9 @@ export class VisionOcrProvider implements OcrProvider {
     const result = await fallback.extractFromBuffer(buffer, mimeType);
 
     return {
-      text: result.text.length > 50 ? result.text : '[OCR Extracted Text]: Scanned Contract Agreement with Verified Signature.',
+      text: result.text.trim().length > 0 ? result.text : '[Scanned Image: Visual content without detectable text layer.]',
       provider: 'VISION_AI',
-      confidence: 0.96,
+      confidence: result.text.trim().length > 0 ? 0.94 : 0.6,
       detectedLanguage: 'en',
       pageCount: 1,
     };

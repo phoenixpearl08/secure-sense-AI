@@ -57,6 +57,27 @@ export interface SecurityPolicyData {
   downloadAllowed?: boolean; // If false, in-browser controlled view only
   viewDurationSeconds?: number; // Timed access window (e.g. 60s)
   deliveryMethod?: DeliveryMethod;
+  // Sender Customization & Advanced Recipient Permissions
+  allowComments?: boolean;
+  allowAnnotations?: boolean;
+  allowAiAnalysis?: boolean;
+  allowAiExport?: boolean;
+  allowPrint?: boolean;
+  allowCopyText?: boolean;
+  customBranding?: {
+    logoUrl?: string;
+    accentColor?: string;
+    companyName?: string;
+    welcomeMessage?: string;
+    completionMessage?: string;
+    theme?: 'dark' | 'light' | 'cyber';
+    layout?: 'compact' | 'detailed';
+  };
+  shareTemplate?: string;
+  scheduledStartTime?: string;
+  notifyOnView?: boolean;
+  notifyOnDownload?: boolean;
+  notifyOnExpiry?: boolean;
 }
 
 export interface EncryptedPayload {
@@ -91,6 +112,10 @@ export interface VaultItem {
   isEphemeral?: boolean;
   createdAt: string;
   updatedAt: string;
+  comments?: Array<{ id: string; authorEmail: string; text: string; createdAt: string; pageNumber?: number }>;
+  extensionRequests?: Array<{ id: string; requesterEmail: string; reason: string; requestedHours: number; status: 'PENDING' | 'APPROVED' | 'REJECTED'; createdAt: string }>;
+  downloadRequests?: Array<{ id: string; requesterEmail: string; reason: string; status: 'PENDING' | 'APPROVED' | 'REJECTED'; createdAt: string }>;
+  acknowledgments?: Array<{ userEmail: string; timestamp: string }>;
 }
 
 export interface AccessAttempt {
@@ -220,6 +245,60 @@ export interface DocumentSecurityClassification {
   justification?: string;
 }
 
+export interface DocumentDeadline {
+  id: string;
+  title: string;
+  dueDate: string;
+  category: 'PAYMENT' | 'EXPIRATION' | 'DEPLOYMENT' | 'REVIEW' | 'NOTICE';
+  status: 'PENDING' | 'OVERDUE' | 'UPCOMING';
+  pageNumber: number;
+  sectionRef: string;
+  sourceSnippet: string;
+}
+
+export interface DocumentObligation {
+  id: string;
+  responsibleParty: string;
+  beneficiary: string;
+  action: string;
+  deadline?: string;
+  penalties?: string;
+  pageNumber: number;
+  sectionRef: string;
+  status: 'PENDING' | 'IN_PROGRESS' | 'AUDITED';
+  assignedOwner?: string;
+  confidence: number;
+}
+
+export interface DocumentFinancialItem {
+  id: string;
+  item: string;
+  amount: string;
+  currency: string;
+  terms: string;
+  isStated: boolean;
+  pageNumber: number;
+  sectionRef: string;
+  snippet: string;
+}
+
+export interface DocumentInconsistency {
+  id: string;
+  category: 'DATE_CONFLICT' | 'AMOUNT_MISMATCH' | 'CONTRADICTORY_CLAUSE' | 'TERMINOLOGY';
+  explanation: string;
+  citationA: string;
+  citationB: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+export interface DocumentMissingInfo {
+  id: string;
+  missingField: string;
+  expectedSection: string;
+  criticality: 'RECOMMENDED' | 'CRITICAL';
+  remedyAction: string;
+}
+
 export interface DocumentData {
   id: string;
   title: string;
@@ -232,8 +311,17 @@ export interface DocumentData {
   chunks: DocumentChunk[];
   insights: DocumentInsight[];
   classification?: DocumentSecurityClassification;
+  deadlines?: DocumentDeadline[];
+  obligations?: DocumentObligation[];
+  financialBreakdown?: DocumentFinancialItem[];
+  inconsistencies?: DocumentInconsistency[];
+  missingInformation?: DocumentMissingInfo[];
   zeroPersistence?: boolean;
   createdAt: string;
+  fileBufferBase64?: string;
+  documentType?: 'TEXTBOOK_EDUCATIONAL' | 'LEGAL_CONTRACT' | 'FINANCIAL_INVOICE' | 'POLICY_PROCEDURAL' | 'TECHNICAL_REPORT' | 'GENERAL';
+  extractionWarnings?: string[];
+  extractionQualityScore?: number;
 }
 
 export interface AskAnswer {

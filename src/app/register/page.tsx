@@ -48,12 +48,17 @@ export default function RegisterPage() {
   return (
     <div className="max-w-md mx-auto py-12 space-y-6">
       <div className="text-center space-y-2">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/20">
-          <Shield className="w-6 h-6 text-white" />
+        <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-cyan-500/40 p-1 flex items-center justify-center mx-auto shadow-lg shadow-cyan-500/20">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/logo.png"
+            alt="Secure Sense AI"
+            className="w-full h-full object-contain"
+          />
         </div>
         <h1 className="text-2xl font-bold text-white tracking-tight">Register Operator</h1>
         <p className="text-xs text-slate-400">
-          Create an administrative or security identity in RealityVault.
+          Create an administrative or security identity in Secure Sense AI.
         </p>
       </div>
 

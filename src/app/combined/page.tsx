@@ -25,6 +25,7 @@ import {
   QrCode
 } from 'lucide-react';
 import { DocumentData, SecurityPolicyData, SecurityScoreReport, PolicyConflictWarning } from '@/types';
+import FileUploadZone, { UploadedFileItem } from '@/components/upload/FileUploadZone';
 
 const SAMPLE_TERM_SHEET = `CONFIDENTIAL EXECUTIVE ACQUISITION TERM SHEET
 Effective Date: November 1, 2026
@@ -56,6 +57,7 @@ export default function CombinedModePage() {
   // Step 1: Document Data
   const [docTitle, setDocTitle] = useState('Acquisition Term Sheet Alpha');
   const [docContent, setDocContent] = useState(SAMPLE_TERM_SHEET);
+  const [uploadedFileItem, setUploadedFileItem] = useState<UploadedFileItem | null>(null);
   const [analyzingDoc, setAnalyzingDoc] = useState(false);
   const [document, setDocument] = useState<DocumentData | null>(null);
 
@@ -88,13 +90,19 @@ export default function CombinedModePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: docTitle,
-          textContent: docContent,
+          title: docTitle || uploadedFileItem?.displayName || 'Confidential Document',
+          fileName: uploadedFileItem?.originalName || `${(docTitle || 'Document').replace(/\s+/g, '_')}.pdf`,
+          mimeType: uploadedFileItem?.mimeType || 'application/pdf',
+          fileBufferBase64: uploadedFileItem?.base64Data,
+          textContent: docContent || undefined,
         }),
       });
       const data = await res.json();
       if (data.success && data.data) {
         setDocument(data.data);
+        if (data.data.extractedText) {
+          setDocContent(data.data.extractedText);
+        }
         setStep(2);
       } else {
         alert(data.error || 'Document analysis failed');
@@ -139,6 +147,7 @@ export default function CombinedModePage() {
     setEncrypting(true);
 
     try {
+      const resolvedBinary = document.fileBufferBase64 || uploadedFileItem?.base64Data;
       const res = await fetch('/api/vault/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -148,6 +157,10 @@ export default function CombinedModePage() {
           recipientEmail,
           policy,
           documentId: document.id,
+          fileName: uploadedFileItem?.originalName || document.fileName,
+          fileSize: uploadedFileItem?.size || document.fileSize,
+          mimeType: uploadedFileItem?.mimeType || document.mimeType,
+          fileData: resolvedBinary || undefined,
         }),
       });
 
@@ -232,6 +245,7 @@ export default function CombinedModePage() {
               <button
                 type="button"
                 onClick={() => {
+                  setUploadedFileItem(null);
                   setDocTitle('Restricted Medical IP Synthesis');
                   setDocContent(SAMPLE_MEDICAL_IP);
                 }}
@@ -241,6 +255,31 @@ export default function CombinedModePage() {
               </button>
             </div>
           </div>
+
+          {/* Reusable File & Folder Upload Component */}
+          <FileUploadZone
+            singleFile={true}
+            onSingleFileParsed={(item) => {
+              setUploadedFileItem(item);
+              setDocTitle(item.displayName);
+              if (item.textSnippet) {
+                setDocContent(item.textSnippet);
+              }
+            }}
+            onFilesChange={(items) => {
+              if (items.length > 0) {
+                setUploadedFileItem(items[0]);
+                setDocTitle(items[0].displayName);
+                if (items[0].textSnippet) {
+                  setDocContent(items[0].textSnippet);
+                }
+              } else {
+                setUploadedFileItem(null);
+              }
+            }}
+            title="Upload Confidential File or Folder Package"
+            description="Drop any PDF, DOCX, Spreadsheet, Image, or Folder to initiate the Zero-Trust Combined Pipeline."
+          />
 
           <div className="space-y-4">
             <div className="space-y-1.5">
@@ -254,9 +293,9 @@ export default function CombinedModePage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">Document Payload</label>
+              <label className="text-xs font-semibold text-slate-300">Document Content Preview / Payload</label>
               <textarea
-                rows={9}
+                rows={7}
                 value={docContent}
                 onChange={(e) => setDocContent(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 text-xs font-mono focus:border-indigo-500 focus:outline-none"
@@ -285,7 +324,7 @@ export default function CombinedModePage() {
                 <span>Step 2: DocSenseAI Security Classification &amp; Insights</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Automated risk scoring identified high-stakes liabilities mandating RealityVault protection.
+                Automated risk scoring identified high-stakes liabilities mandating Secure Sense AI protection.
               </p>
             </div>
             {document.classification && (
@@ -374,7 +413,7 @@ export default function CombinedModePage() {
           <div className="space-y-1">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-cyan-400" />
-              <span>Step 3: Dictate Security Intent to RealityVault AI</span>
+              <span>Step 3: Dictate Security Intent to Secure Sense AI</span>
             </h2>
             <p className="text-xs text-slate-400">
               Natural language intent is compiled into a deterministic, schema-validated security policy.

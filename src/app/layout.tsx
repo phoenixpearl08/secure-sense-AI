@@ -4,8 +4,18 @@ import './globals.css';
 import Navbar from '@/components/layout/Navbar';
 
 export const metadata: Metadata = {
-  title: 'RealityVault AI + DocSenseAI | Secure Communication & Document Intelligence',
-  description: 'AI-powered adaptive security policies, authenticated AES-256-GCM encryption, and source-grounded document intelligence.',
+  title: 'Secure Sense AI | Secure Communication & Document Intelligence',
+  description: 'AI-powered adaptive security policies, authenticated AES-256-GCM encryption, biometric trust, and source-grounded document intelligence.',
+  icons: {
+    icon: '/brand/logo.png',
+    shortcut: '/brand/logo.png',
+    apple: '/brand/logo.png',
+  },
+  openGraph: {
+    title: 'Secure Sense AI — Intelligent Security & Document Platform',
+    description: 'AI-powered adaptive security policies, authenticated AES-256-GCM encryption, biometric trust, and source-grounded document intelligence.',
+    images: ['/brand/logo.png'],
+  },
 };
 
 export default function RootLayout({
@@ -19,17 +29,17 @@ export default function RootLayout({
         <Suspense fallback={<div className="h-16 border-b border-slate-800 bg-slate-950" />}>
           <Navbar />
         </Suspense>
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>
         <footer className="border-t border-slate-800/80 bg-slate-950/60 py-6 text-center text-xs text-slate-400">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+          <div className="max-w-[1600px] mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
             <div>
-              <span className="font-semibold text-slate-300">REALITYVAULT AI</span> &bull; Core Principle:
+              <span className="font-semibold text-slate-300">SECURE SENSE AI</span> &bull; Core Principle:
               <span className="text-cyan-400 ml-1">AI Recommends. Backend Decides. Cryptography Enforces.</span>
             </div>
             <div className="font-mono text-slate-400">
-              AES-256-GCM &bull; Atomic Access &bull; Grounded Q&A
+              AES-256-GCM &bull; Biometric Zero-Trust &bull; Grounded Q&A
             </div>
           </div>
         </footer>
